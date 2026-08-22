@@ -534,7 +534,7 @@ async function wait(ms) {
   ok("오늘 묶음은 테두리로 강조된다", todayCard.getAttribute("style").includes("border:1px solid var(--fg)"));
   ok("오늘 합계가 크게 보인다", todayCard.textContent.includes("30,000"));
   ok("오늘 몇 건인지 보인다", todayCard.textContent.includes("1건"));
-  ok("내역 아래에 전체 삭제가 있다", !!doc.querySelector('[data-act="deleteAllInHistory"]'));
+  ok("내역 전체 삭제 버튼은 없앴다 (꾹 눌러 선택으로 대체)", !doc.querySelector('[data-act="deleteAllInHistory"]'));
   click('[data-act="goHome"]');
   await tick(4);
 
@@ -547,29 +547,51 @@ async function wait(ms) {
   click('[data-act="closeMenu"]');
   await tick(3);
 
-  // 나의 가계부
+  // 나의 가계부: 아무것도 묻지 않고 바로 시작된다
   click('[data-act="openSwitcher"]');
   await tick(4);
   click('[data-el="switcherList"] [data-act="openPersonal"]');
-  await tick(5);
-  ok("나의 가계부 만들기가 열린다", visible("personalOpen"));
-  ok("금액을 넣기 전에는 시작할 수 없다", el("createPersonal").disabled === true);
-  type("pbTotal", "600000");
-  await tick(3);
-  ok("금액을 넣으면 시작할 수 있다", el("createPersonal").disabled === false);
-  ok("이번 달 기준임을 알려 준다", txt("pbHint").includes("달이 바뀌면"));
-  click('[data-act="createPersonal"]');
-  await tick(12);
+  await tick(14);
 
+  ok("설정을 묻지 않고 바로 시작한다", !visible("personalOpen"));
   ok("나의 가계부로 들어온다", visible("hasBudget"));
   ok("메인에 나의 가계부와 이번 달이 보인다", txt("homeBudgetName").indexOf("나의 가계부 · ") === 0, txt("homeBudgetName"));
   const personalPath = [...fake.docs.keys()].find(
     (k) => k.startsWith("budgets/") && k.split("/").length === 2 && fake.docs.get(k).kind === "personal"
   );
   ok("나의 가계부 문서가 생긴다", !!personalPath);
-  eq("한 달 예산이 저장된다", fake.docs.get(personalPath).totalAmount, 600000);
+  eq("한도 없이 시작한다", fake.docs.get(personalPath).totalAmount, 0);
+  eq("기본은 매달", fake.docs.get(personalPath).periodMode, "month");
   eq("이번 달로 시작한다", fake.docs.get(personalPath).startDate, win.MP.calc.monthBounds(win.MP.calc.todayISO()).start);
-  eq("남은 금액은 아직 한 달 예산 그대로", txt("remainingText"), "600,000");
+
+  eq("한도가 없으면 쓴 돈을 보여준다", txt("mainLabel"), "쓴 돈");
+  ok("게이지는 숨긴다", !visible("hasLimit"));
+  ok("한도를 정하라는 안내가 보인다", visible("noLimit"));
+  eq("권장액 대신 하루 평균", txt("perDayLabel"), "하루 평균");
+  eq("아직 쓴 게 없다", txt("remainingText"), "0");
+
+  // 한도와 기간은 나의 가계부 안에서 정한다
+  click('[data-show="isPersonalHome"][data-act="openPersonal"]');
+  await tick(8);
+  ok("설정 화면이 열린다", visible("personalOpen"));
+  ok("기본 기간은 매달", !visible("pbCustom"));
+  click('[data-act="pbModeCustom"]');
+  await tick(3);
+  ok("직접 지정을 고르면 날짜 칸이 열린다", visible("pbCustom"));
+  click('[data-act="pbModeMonth"]');
+  await tick(3);
+  ok("매달로 되돌릴 수 있다", !visible("pbCustom"));
+  type("pbTotal", "600000");
+  await tick(3);
+  click('[data-act="savePersonal"]');
+  await tick(14);
+
+  eq("한도가 저장된다", fake.docs.get(personalPath).totalAmount, 600000);
+  ok("설정 화면이 닫힌다", !visible("personalOpen"));
+  eq("한도가 생기면 남은 금액으로", txt("mainLabel"), "남은 금액");
+  eq("남은 금액은 한도 그대로", txt("remainingText"), "600,000");
+  eq("오늘 쓸 수 있는 돈으로 바뀐다", txt("perDayLabel"), "오늘 쓸 수 있는 돈");
+  ok("게이지가 다시 보인다", visible("hasLimit"));
 
   // 나의 가계부는 함께 쓸 수 없다
   click('[data-act="openShare"]');
@@ -654,12 +676,69 @@ async function wait(ms) {
   ok("사람별 목록에 두 사람이 다 나온다",
     el("memberShares").textContent.includes("지민") && el("memberShares").textContent.includes("예은"));
 
+  // 도넛: 카테고리마다 다른 색
+  const donut = el("donut").getAttribute("style");
+  ok("도넛이 카테고리 색으로 나뉜다", donut.includes("var(--c1)"), donut);
+  ok("두 번째 카테고리는 다른 색", donut.includes("var(--c2)"), donut);
+  ok("조각 사이에 배경색 틈이 있다", donut.includes("var(--bg)"), donut);
+  ok("남은 몫은 연한 회색", donut.includes("var(--g1)"), donut);
+  const sharesHTML = el("shares").innerHTML;
+  ok("목록에도 같은 색 점이 붙는다", sharesHTML.includes("var(--c1)") && sharesHTML.includes("var(--c2)"));
+  ok("색만이 아니라 이름과 금액도 적혀 있다",
+    el("shares").textContent.includes("숙박") && el("shares").textContent.includes("원"));
+
   /* --- 9. 내역 탭 --- */
   click('[data-act="goHistory"]');
   await tick(6);
   ok("내역 탭이 열린다", visible("isHistory"));
   eq("합계", txt("viewSpentText"), "120,000");
   ok("작성자 이름이 줄마다 보인다", el("groups").textContent.includes("예은"));
+
+  // 달력 보기
+  ok("기본은 리스트", visible("listMode") && !visible("calMode"));
+  click('[data-act="toggleCalendar"]');
+  await tick(7);
+  ok("달력으로 바뀐다", visible("calMode") && !visible("listMode"));
+  ok("리스트는 감춰진다", !visible("hasRows"));
+  ok("달 제목이 나온다", txt("calMonthText").includes("월"), txt("calMonthText"));
+
+  const cells = [...doc.querySelectorAll('[data-el="calGrid"] .mm-cal-cell')];
+  eq("항상 6주 42칸", cells.length, 42);
+  const filled = cells.filter((c) => !c.disabled);
+  ok("내역 있는 날만 누를 수 있다", filled.length > 0);
+  ok("칸 안에 금액이 보인다", filled[0].textContent.includes(","), filled[0].textContent);
+  ok("칸 안에 카테고리 이모지가 보인다", /\p{Extended_Pictographic}/u.test(filled[0].textContent));
+
+  const monthBefore = txt("calMonthText");
+  click('[data-act="calPrev"]');
+  await tick(5);
+  ok("이전 달로 넘어간다", txt("calMonthText") !== monthBefore);
+  click('[data-act="calNext"]');
+  await tick(5);
+  eq("다시 돌아온다", txt("calMonthText"), monthBefore);
+
+  // 날짜를 누르면 상세 팝업 (달을 넘겼다 왔으므로 칸을 다시 찾는다)
+  const fresh = [...doc.querySelectorAll('[data-el="calGrid"] .mm-cal-cell')].filter((c) => !c.disabled);
+  ok("달을 오가도 내역 있는 칸이 그대로다", fresh.length === filled.length);
+  click(fresh.find((c) => c.getAttribute("data-date") === win.MP.calc.todayISO()) || fresh[0]);
+  await tick(6);
+  ok("날짜를 누르면 상세가 열린다", visible("dayOpen"));
+  ok("그날 합계가 보인다", txt("daySum").includes("원"), txt("daySum"));
+  ok("상세에 항목이 나온다", el("dayList").textContent.length > 0);
+  ok("상세에서 삭제할 수 있다", !!doc.querySelector('[data-el="dayList"] [data-act="removeExpense"]'));
+
+  const editFromDay = doc.querySelector('[data-el="dayList"] [data-act="editExpense"]');
+  ok("상세에서 수정으로 갈 수 있다", !!editFromDay);
+  click(editFromDay);
+  await tick(7);
+  ok("수정 화면이 열린다", visible("addOpen"));
+  ok("팝업은 닫힌다", !visible("dayOpen"));
+  click('[data-act="closeAdd"]');
+  await tick(5);
+
+  click('[data-act="toggleCalendar"]');
+  await tick(6);
+  ok("다시 리스트로 돌아온다", visible("listMode") && !visible("calMode"));
 
   /* --- 10. 테마 --- */
   click('[data-act="goHome"]');

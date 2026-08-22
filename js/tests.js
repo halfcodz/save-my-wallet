@@ -458,6 +458,81 @@
     eq("달이 바뀌어도 끝나지 않는다", nextMonth.status, "active");
     eq("달이 바뀌면 남은 일수도 새 달 기준", nextMonth.daysLeft, 29);
 
+    /* ---------- 19.7 달력 격자 ---------- */
+    var grid = calc.monthGrid("2026-08-15");
+    eq("달력: 항상 6주", grid.length, 6);
+    eq("달력: 한 주 7칸", grid[0].length, 7);
+    eq("달력: 첫 칸은 그 주 일요일", grid[0][0].date, "2026-07-26");
+    eq("달력: 마지막 칸", grid[5][6].date, "2026-09-05");
+    eq("달력: 8월 1일은 토요일 자리", grid[0][6].date, "2026-08-01");
+    ok("달력: 앞선 달 칸은 이번 달이 아님", grid[0].slice(0, 6).every(function (c) { return !c.inMonth; }));
+    ok("달력: 8월 1일은 이번 달", grid[0][6].inMonth);
+    eq("달력: 이번 달 칸 수 = 31", grid.reduce(function (n, w) {
+      return n + w.filter(function (c) { return c.inMonth; }).length;
+    }, 0), 31);
+    eq("달력: 2월(평년) 칸 수 = 28", calc.monthGrid("2026-02-10").reduce(function (n, w) {
+      return n + w.filter(function (c) { return c.inMonth; }).length;
+    }, 0), 28);
+    ok("달력: 칸은 하루씩 이어진다", (function () {
+      var flat = [];
+      grid.forEach(function (w) { flat = flat.concat(w); });
+      for (var i = 1; i < flat.length; i++) {
+        if (calc.diffDays(flat[i - 1].date, flat[i].date) !== 1) return false;
+      }
+      return flat.length === 42;
+    })());
+
+    eq("달 이동: 다음 달 1일", calc.addMonths("2026-08-15", 1), "2026-09-01");
+    eq("달 이동: 연 경계 뒤로", calc.addMonths("2026-01-10", -1), "2025-12-01");
+    eq("달 이동: 연 경계 앞으로", calc.addMonths("2026-12-31", 1), "2027-01-01");
+
+    var idx = calc.indexByDate([
+      exp("b1", 1000, "2026-08-22"),
+      exp("b1", 2000, "2026-08-22"),
+      exp("b1", 500, "2026-08-21")
+    ]);
+    eq("날짜별 색인: 합계", idx["2026-08-22"].sum, 3000);
+    eq("날짜별 색인: 건수", idx["2026-08-22"].items.length, 2);
+    eq("날짜별 색인: 다른 날", idx["2026-08-21"].sum, 500);
+    ok("날짜별 색인: 없는 날은 undefined", idx["2026-08-20"] === undefined);
+
+    /* ---------- 19.8 한도 없이 기록만 하는 가계부 ---------- */
+    var free = model.normalizeBudget({
+      id: "f1", kind: "personal", name: "나의 가계부",
+      startDate: "2026-08-01", endDate: "2026-08-31",
+      totalAmount: 0, ownerUid: "u1", memberUids: ["u1"]
+    });
+    eq("한도 없음: 기본 기간은 매달", free.periodMode, "month");
+
+    var freeStats = calc.computeBudgetStats(free, [
+      exp("f1", 30000, "2026-08-01"),
+      exp("f1", 20000, "2026-08-05")
+    ], "2026-08-05");
+    ok("한도 없음: hasLimit false", !freeStats.hasLimit);
+    eq("한도 없음: 쓴 돈은 그대로 센다", freeStats.spent, 50000);
+    eq("한도 없음: 5일째", freeStats.elapsedDays, 5);
+    eq("한도 없음: 하루 평균 10,000", freeStats.avgPerDay, 10000);
+    eq("한도 없음: 게이지는 0%", freeStats.spentPct, 0);
+
+    var limited = model.normalizeBudget({
+      id: "f2", kind: "personal", startDate: "2026-08-01", endDate: "2026-08-31",
+      totalAmount: 600000, ownerUid: "u1", memberUids: ["u1"]
+    });
+    ok("한도 있음: hasLimit true", calc.computeBudgetStats(limited, [], "2026-08-05").hasLimit);
+
+    /* 직접 지정한 기간은 달이 바뀌어도 그대로 */
+    var fixed = model.normalizeBudget({
+      id: "f3", kind: "personal", periodMode: "custom",
+      startDate: "2026-08-10", endDate: "2026-09-09",
+      totalAmount: 300000, ownerUid: "u1", memberUids: ["u1"]
+    });
+    eq("직접 지정: 기간 유지 (시작)", calc.effectiveBudget(fixed, "2026-09-02").startDate, "2026-08-10");
+    eq("직접 지정: 기간 유지 (종료)", calc.effectiveBudget(fixed, "2026-09-02").endDate, "2026-09-09");
+    eq("직접 지정: 달을 넘긴 지출도 센다", calc.computeBudgetStats(fixed, [
+      exp("f3", 10000, "2026-08-20"),
+      exp("f3", 20000, "2026-09-02")
+    ], "2026-09-02").spent, 30000);
+
     /* ---------- 20. 자정 넘김 ---------- */
     var beforeMidnight = calc.computeBudgetStats(b, e1, "2026-08-22");
     var afterMidnight = calc.computeBudgetStats(b, e1, "2026-08-23");

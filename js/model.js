@@ -153,6 +153,8 @@
     return {
       id: String(b.id),
       kind: personal ? "personal" : "trip",
+      // 나의 가계부에서만 뜻이 있다. "month"면 달마다 새로 시작, "custom"이면 정해 둔 기간.
+      periodMode: personal && b.periodMode === "custom" ? "custom" : "month",
       name: str(b.name, "").trim() || "예산",
       startDate: start,
       endDate: end,

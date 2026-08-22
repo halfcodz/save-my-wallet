@@ -81,6 +81,8 @@
    */
   function effectiveBudget(budget, todayIso) {
     if (!isPersonal(budget)) return budget;
+    // 안에서 기간을 직접 정했으면 그걸 쓴다
+    if (budget.periodMode === "custom") return budget;
     var m = monthBounds(todayIso);
     var out = {};
     for (var k in budget) {
@@ -94,11 +96,50 @@
   /** 이 예산에 속한 지출. 나의 가계부는 이번 달 것만 센다. */
   function budgetExpenses(expenses, budget, todayIso) {
     var list = expensesOfBudget(expenses, budget.id);
-    if (!isPersonal(budget)) return list;
+    if (!isPersonal(budget) || budget.periodMode === "custom") return list;
     var b = effectiveBudget(budget, todayIso);
     return list.filter(function (e) {
       return e.date >= b.startDate && e.date <= b.endDate;
     });
+  }
+
+  /** 그 달의 1일로 n달 이동 */
+  function addMonths(iso, n) {
+    var p = String(iso).split("-").map(Number);
+    var d = new Date(Date.UTC(p[0], p[1] - 1 + n, 1));
+    return d.getUTCFullYear() + "-" + pad2(d.getUTCMonth() + 1) + "-01";
+  }
+
+  /**
+   * 달력 격자. 일요일 시작, 항상 6주 42칸이라 달을 넘겨도 높이가 흔들리지 않는다.
+   * 각 칸: { date, inMonth }
+   */
+  function monthGrid(iso) {
+    var m = monthBounds(iso);
+    var lead = parseISO(m.start).getDay(); // 0 = 일요일
+    var first = addDays(m.start, -lead);
+    var weeks = [];
+    for (var w = 0; w < 6; w++) {
+      var days = [];
+      for (var d = 0; d < 7; d++) {
+        var date = addDays(first, w * 7 + d);
+        days.push({ date: date, inMonth: date >= m.start && date <= m.end });
+      }
+      weeks.push(days);
+    }
+    return weeks;
+  }
+
+  /** 날짜 -> { sum, items } 로 바로 찾을 수 있게 */
+  function indexByDate(expenses) {
+    var out = {};
+    for (var i = 0; i < expenses.length; i++) {
+      var e = expenses[i];
+      if (!out[e.date]) out[e.date] = { sum: 0, items: [] };
+      out[e.date].sum += e.amount;
+      out[e.date].items.push(e);
+    }
+    return out;
   }
 
   /** 'upcoming' | 'active' | 'ended' */
@@ -185,8 +226,16 @@
     var ended = status === "ended";
     var perDay = ended ? null : floorTo100(remaining / left);
 
+    // 한도를 정하지 않은 가계부(그냥 기록용)는 남은 금액 대신 하루 평균을 본다
+    var hasLimit = total > 0;
+    var span = diffDays(b.startDate, b.endDate) + 1;
+    var elapsed = clamp(diffDays(b.startDate, todayIso) + 1, 1, span);
+
     return {
       total: total,
+      hasLimit: hasLimit,
+      elapsedDays: elapsed,
+      avgPerDay: Math.round(spent / elapsed),
       spent: spent,
       remaining: remaining,
       todaySpent: todaySpent,
@@ -444,6 +493,9 @@
     budgetStatus: budgetStatus,
     monthBounds: monthBounds,
     monthLabel: monthLabel,
+    addMonths: addMonths,
+    monthGrid: monthGrid,
+    indexByDate: indexByDate,
     isPersonal: isPersonal,
     effectiveBudget: effectiveBudget,
     budgetExpenses: budgetExpenses,

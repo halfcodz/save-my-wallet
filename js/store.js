@@ -416,6 +416,7 @@
     members[me.uid] = { name: myName() };
     ref.set({
       kind: b.kind === "personal" ? "personal" : "trip",
+      periodMode: b.periodMode === "custom" ? "custom" : "month",
       name: b.name,
       startDate: b.startDate,
       endDate: b.endDate,
@@ -440,7 +441,11 @@
     return null;
   }
 
-  function addPersonalBudget(monthlyTotal, todayIso) {
+  /**
+   * 나의 가계부는 물어보지 않고 바로 만든다.
+   * 기록부터 시작하고, 한도나 기간은 나중에 안에서 정한다 (totalAmount 0 = 한도 없음).
+   */
+  function addPersonalBudget(todayIso) {
     var already = personalBudget();
     if (already) {
       setActiveBudget(already.id);
@@ -452,8 +457,27 @@
       name: model.PERSONAL_NAME,
       startDate: month.start,
       endDate: month.end,
-      totalAmount: monthlyTotal
+      totalAmount: 0,
+      periodMode: "month"
     });
+  }
+
+  /** 나의 가계부 안에서 기간·한도를 바꾼다 */
+  function updatePersonal(id, patch) {
+    var b = findBudget(id);
+    if (!b || b.kind !== "personal") return;
+    var next = { totalAmount: Math.max(0, Math.round(patch.totalAmount || 0)) };
+    next.periodMode = patch.periodMode === "custom" ? "custom" : "month";
+    if (next.periodMode === "custom") {
+      next.startDate = patch.startDate;
+      next.endDate = patch.endDate;
+    } else {
+      // 매달로 되돌리면 기준 달은 오늘이 속한 달로 맞춰 둔다
+      var month = calc.monthBounds(patch.todayIso);
+      next.startDate = month.start;
+      next.endDate = month.end;
+    }
+    patchBudget(id, next);
   }
 
   function patchBudget(id, patch) {
@@ -859,6 +883,7 @@
     // 예산
     addBudget: addBudget,
     addPersonalBudget: addPersonalBudget,
+    updatePersonal: updatePersonal,
     personalBudget: personalBudget,
     patchBudget: patchBudget,
     removeBudget: removeBudget,

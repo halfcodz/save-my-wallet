@@ -144,23 +144,26 @@
             <span data-show="isSharedHome" data-el="sharedBadge" style="flex:0 0 auto;font-size:11px;font-weight:700;color:var(--g3)"></span>
             <span style="flex:0 0 auto;font-size:9px;color:var(--g3);line-height:1">▼</span>
           </button>
-          <div style="font-size:12px;color:var(--g3);letter-spacing:.04em">남은 금액</div>
+          <div data-el="mainLabel" style="font-size:12px;color:var(--g3);letter-spacing:.04em">남은 금액</div>
           <div data-el="remainingRow" style="display:flex;align-items:baseline;gap:4px;margin-top:2px">
             <div data-el="remainingText" class="mm-fit" style="font-size:56px;font-weight:800;letter-spacing:-.045em;line-height:1.05">0</div>
             <div data-el="remainingWon" style="font-size:20px;font-weight:600;color:var(--g3)">원</div>
           </div>
 
-          <div style="margin-top:18px;height:10px;border-radius:5px;background:var(--g1);overflow:hidden">
-            <div data-el="gauge"></div>
+          <div data-show="hasLimit">
+            <div style="margin-top:18px;height:10px;border-radius:5px;background:var(--g1);overflow:hidden">
+              <div data-el="gauge"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:12px;color:var(--g3)">
+              <span><span data-el="spentText">0</span>원 씀</span>
+              <span><span data-el="totalText">0</span>원</span>
+            </div>
           </div>
-          <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:12px;color:var(--g3)">
-            <span><span data-el="spentText">0</span>원 씀</span>
-            <span><span data-el="totalText">0</span>원</span>
-          </div>
+          <button data-show="noLimit" data-act="openPersonal" style="margin-top:16px;width:100%;border:1px dashed var(--g2);border-radius:12px;background:none;padding:12px;font-size:12.5px;font-weight:600;color:var(--g3)">한 달에 쓸 돈을 정해 두면 오늘 쓸 수 있는 돈을 알려드려요</button>
 
           <div style="display:flex;margin-top:22px;border:1px solid var(--g2);border-radius:14px;overflow:hidden">
             <div style="flex:1;padding:14px 16px;min-width:0">
-              <div style="font-size:11px;color:var(--g3)">오늘 쓸 수 있는 돈</div>
+              <div data-el="perDayLabel" style="font-size:11px;color:var(--g3)">오늘 쓸 수 있는 돈</div>
               <div data-el="perDayRow" style="display:flex;align-items:baseline;gap:3px;margin-top:4px">
                 <div data-el="perDayText" class="mm-fit" style="font-size:24px;font-weight:700;letter-spacing:-.03em">0</div>
                 <div data-el="perDayWon" style="font-size:12px;color:var(--g3)">원</div>
@@ -175,11 +178,14 @@
               </div>
             </div>
           </div>
-          <div data-el="daysLeftText" style="margin-top:8px;font-size:11px;color:var(--g3);text-align:right"></div>
+          <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-top:8px">
+            <button data-show="isPersonalHome" data-act="openPersonal" style="border:none;background:none;padding:0;font-size:11px;color:var(--g3);text-decoration:underline">기간·한도 설정</button>
+            <div data-el="daysLeftText" style="flex:1;font-size:11px;color:var(--g3);text-align:right"></div>
+          </div>
         </div>
 
         <div style="padding:0 20px">
-          <div style="font-size:13px;font-weight:700;padding-bottom:10px">오늘 내역</div>
+          <div data-el="todayListTitle" style="font-size:13px;font-weight:700;padding-bottom:10px">오늘 내역</div>
           <div data-show="todayEmpty" style="padding:26px 0;text-align:center;font-size:13px;color:var(--g3)">아직 없습니다</div>
           <div data-el="todayList"></div>
         </div>
@@ -194,19 +200,29 @@
             <button data-act="deleteSelected" style="border:none;border-radius:9px;background:var(--fg);color:var(--bg);padding:8px 14px;font-size:13px;font-weight:700">삭제</button>
             <button data-act="exitSel" style="border:none;background:none;padding:6px 0;font-size:13px;color:var(--g3)">취소</button>
           </div>
-          <div data-show="notSelMode" style="display:flex;align-items:baseline;justify-content:space-between;padding-bottom:14px">
-            <div data-el="viewPeriodText" style="font-size:12px;color:var(--g3)"></div>
-            <div style="display:flex;align-items:baseline;gap:14px">
-              <div style="font-size:15px;font-weight:700"><span data-el="viewSpentText">0</span>원</div>
-              <button data-act="enterSel" style="border:none;background:none;padding:0;font-size:13px;color:var(--g3)">선택</button>
+          <div data-show="notSelMode" style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:14px">
+            <div data-el="viewPeriodText" style="flex:1;min-width:0;font-size:12px;color:var(--g3)"></div>
+            <div style="font-size:15px;font-weight:700;flex:0 0 auto"><span data-el="viewSpentText">0</span>원</div>
+            <button data-act="toggleCalendar" data-el="calToggle" title="달력으로 보기" style="flex:0 0 auto;width:32px;height:32px;padding:0;border:1px solid var(--g2);border-radius:9px;background:none;display:grid;place-items:center">
+              <svg width="15" height="15" viewBox="0 0 20 20" aria-hidden="true" style="display:block"><rect x="2.5" y="4" width="15" height="13.5" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.6"></rect><path d="M2.5 8.2 H17.5 M6.5 2.5 V5.2 M13.5 2.5 V5.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg>
+            </button>
+            <button data-act="enterSel" data-show="listMode" style="flex:0 0 auto;border:none;background:none;padding:0;font-size:13px;color:var(--g3)">선택</button>
+          </div>
+
+          <!-- 달력 보기 -->
+          <div data-show="calMode">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:12px">
+              <button data-act="calPrev" style="width:34px;height:34px;border:1px solid var(--g2);border-radius:9px;background:none;font-size:14px;color:var(--g3)">‹</button>
+              <div data-el="calMonthText" style="font-size:15px;font-weight:700;letter-spacing:-.01em"></div>
+              <button data-act="calNext" style="width:34px;height:34px;border:1px solid var(--g2);border-radius:9px;background:none;font-size:14px;color:var(--g3)">›</button>
             </div>
+            <div class="mm-cal-dow"><div>일</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div>토</div></div>
+            <div data-el="calGrid" class="mm-cal"></div>
+            <div style="font-size:10px;color:var(--g2);text-align:center;padding:12px 0 6px">날짜를 누르면 그날 내역이 열립니다</div>
           </div>
           <div data-show="viewEmpty" style="padding:40px 0;text-align:center;font-size:13px;color:var(--g3)">내역이 없습니다</div>
           <div data-el="groups"></div>
           <div data-show="hasRows" style="font-size:10px;color:var(--g2);text-align:center;padding-bottom:6px">길게 눌러 여러 개 선택</div>
-          <div data-show="hasRows" style="text-align:center;padding:14px 0 20px">
-            <button data-act="deleteAllInHistory" style="border:none;background:none;padding:8px 12px;font-size:12px;color:var(--g3);text-decoration:underline">이 예산 내역 전체 삭제</button>
-          </div>
         </div>
       </div>
 
@@ -309,23 +325,58 @@
     </div>
   </div>
 
-  <!-- ===== 나의 가계부 만들기 ===== -->
+  <!-- ===== 나의 가계부 설정 ===== -->
   <div data-show="personalOpen" data-safe-top style="position:absolute;inset:0;background:var(--bg);z-index:90;display:flex;flex-direction:column;animation:mmUp .2s ease-out">
     <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px">
-      <div style="font-size:16px;font-weight:700">나의 가계부</div>
+      <div style="font-size:16px;font-weight:700">나의 가계부 설정</div>
       <button data-act="closePersonal" style="border:none;background:none;padding:0;font-size:14px;color:var(--g3)">닫기</button>
     </div>
     <div style="padding:4px 20px max(20px,env(safe-area-inset-bottom));overflow-y:auto;flex:1">
-      <div style="font-size:13px;color:var(--g3);line-height:1.8">여행 예산과 따로 두는, 평소에 쓰는 가계부입니다.<br />한 달에 쓸 수 있는 돈을 정해 두면 오늘 쓸 수 있는 돈을 알려줍니다.</div>
+      <div style="font-size:13px;color:var(--g3);line-height:1.8">정하지 않아도 됩니다. 그냥 쓰는 대로 기록됩니다.<br />한도를 정해 두면 오늘 쓸 수 있는 돈을 알려드립니다.</div>
+
       <div style="border:1px solid var(--g2);border-radius:14px;padding:16px;margin-top:18px">
-        <div style="font-size:11px;color:var(--g3);padding-bottom:5px">한 달 예산</div>
-        <div style="display:flex;align-items:baseline;gap:5px;border-bottom:1px solid var(--g2)">
-          <input inputmode="numeric" data-el="pbTotal" placeholder="0" style="flex:1;min-width:0;border:none;padding:6px 0;font-size:30px;font-weight:800;letter-spacing:-.03em;outline:none;text-align:right" />
-          <div style="font-size:15px;color:var(--g3)">원</div>
+        <div style="font-size:11px;color:var(--g3);padding-bottom:9px">집계 기간</div>
+        <div style="display:flex;gap:8px">
+          <button data-act="pbModeMonth" data-el="pbModeMonth">매달</button>
+          <button data-act="pbModeCustom" data-el="pbModeCustom">직접 지정</button>
         </div>
-        <button data-act="createPersonal" data-el="createPersonal" style="margin-top:16px;width:100%;height:52px;border:none;border-radius:13px;background:var(--fg);color:var(--bg);font-size:16px;font-weight:700">나의 가계부 시작</button>
+
+        <div data-show="pbCustom" style="display:flex;gap:10px;padding-top:14px">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:11px;color:var(--g3);padding-bottom:5px">시작</div>
+            <input type="date" data-el="pbStart" style="width:100%;border:1px solid var(--g2);border-radius:9px;padding:8px;font-size:13px" />
+          </div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:11px;color:var(--g3);padding-bottom:5px">종료</div>
+            <input type="date" data-el="pbEnd" style="width:100%;border:1px solid var(--g2);border-radius:9px;padding:8px;font-size:13px" />
+          </div>
+        </div>
+
+        <div style="padding-top:16px">
+          <div data-el="pbTotalLabel" style="font-size:11px;color:var(--g3);padding-bottom:5px">한 달 한도 (선택)</div>
+          <div style="display:flex;align-items:baseline;gap:5px;border-bottom:1px solid var(--g2)">
+            <input inputmode="numeric" data-el="pbTotal" placeholder="한도 없음" style="flex:1;min-width:0;border:none;padding:6px 0;font-size:26px;font-weight:800;letter-spacing:-.03em;outline:none;text-align:right" />
+            <div style="font-size:15px;color:var(--g3)">원</div>
+          </div>
+          <div style="font-size:11px;color:var(--g3);padding-top:8px;line-height:1.6">비워 두면 한도 없이 기록만 합니다.</div>
+        </div>
+
+        <button data-act="savePersonal" style="margin-top:18px;width:100%;height:52px;border:none;border-radius:13px;background:var(--fg);color:var(--bg);font-size:16px;font-weight:700">저장</button>
       </div>
+
       <div data-el="pbHint" style="font-size:11px;color:var(--g3);line-height:1.7;padding-top:14px"></div>
+    </div>
+  </div>
+
+  <!-- ===== 달력에서 고른 날짜의 내역 ===== -->
+  <div data-show="dayOpen" data-act="closeDay" style="position:absolute;inset:0;z-index:84;background:rgba(0,0,0,.32);display:flex;flex-direction:column;justify-content:flex-end">
+    <div data-el="daySheet" style="background:var(--bg);border-top-left-radius:18px;border-top-right-radius:18px;padding:0 8px max(18px,env(safe-area-inset-bottom));max-height:78%;display:flex;flex-direction:column;animation:mmUp .18s ease-out">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:18px 12px 10px;flex:0 0 auto">
+        <div data-el="dayTitle" style="font-size:15px;font-weight:800;letter-spacing:-.01em"></div>
+        <div data-el="daySum" style="font-size:15px;font-weight:800"></div>
+      </div>
+      <div data-el="dayList" style="overflow-y:auto;flex:1;min-height:0;padding:0 12px"></div>
+      <button data-act="addOnDay" style="flex:0 0 auto;margin:12px 12px 4px;height:48px;border:none;border-radius:13px;background:var(--fg);color:var(--bg);font-size:15px;font-weight:700">이 날짜에 추가</button>
     </div>
   </div>
 

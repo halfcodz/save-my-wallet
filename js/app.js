@@ -28,12 +28,16 @@
     menuOpen: false,
     switcherOpen: false,
     personalOpen: false,
+    historyView: "list",   // "list" | "calendar"
+    calMonth: today,        // 달력이 보고 있는 달
+    dayOpen: null,          // 팝업으로 연 날짜
+
     snack: null,
     snackTimer: null,
     updateReady: false,
     draft: { amount: 0, categoryId: null, memo: "", date: today, editingId: null },
     nb: { name: "", start: today, end: calc.addDays(today, 6), total: "" },
-    pb: { total: "" },
+    pb: { total: "", mode: "month", start: today, end: today },
     auth: { mode: "login", email: "", password: "", name: "", error: "", busy: false },
     share: { code: "", error: "", busy: false }
   };
@@ -291,6 +295,9 @@
     show("shareOpen", ui.shareOpen);
     show("switcherOpen", ui.switcherOpen);
     show("personalOpen", ui.personalOpen);
+    show("dayOpen", !!ui.dayOpen);
+    show("listMode", ui.historyView === "list");
+    show("calMode", ui.historyView === "calendar");
     show("snackOpen", !!ui.snack);
     show("snackUndo", !!(ui.snack && ui.snack.undo));
     show("editing", !!ui.draft.editingId);
@@ -323,6 +330,7 @@
     renderShare();
     renderSwitcher();
     renderPersonal();
+    renderDaySheet();
   }
 
   /** 화면에 보이는 기간. 나의 가계부는 이번 달. */
@@ -405,23 +413,27 @@
     html(el("switcherList"), out);
   }
 
-  /** 나의 가계부 만들기 시트 */
+  /** 나의 가계부 설정 시트 — 기간과 한도는 여기서만 정한다 */
   function renderPersonal() {
     if (!ui.personalOpen) return;
+    var custom = ui.pb.mode === "custom";
+
+    css("pbModeMonth", chipStyle(!custom));
+    css("pbModeCustom", chipStyle(custom));
+    show("pbCustom", custom);
+
     value(el("pbTotal"), ui.pb.total);
+    value(el("pbStart"), ui.pb.start);
+    value(el("pbEnd"), ui.pb.end);
+    text("pbTotalLabel", custom ? "기간 한도 (선택)" : "한 달 한도 (선택)");
+
     var month = calc.monthBounds(today);
     text(
       "pbHint",
-      "달이 바뀌면 새 달로 자동으로 넘어갑니다. 지금은 " +
-        calc.periodLabel({ startDate: month.start, endDate: month.end }) + " 기준입니다."
-    );
-    var ok = calc.isValidAmount(calc.parseAmount(ui.pb.total));
-    var base = "margin-top:16px;width:100%;height:52px;border:none;border-radius:13px;font-size:16px;font-weight:700;background:";
-    disable(
-      el("createPersonal"),
-      !ok,
-      base + "var(--fg);color:var(--bg)",
-      base + "var(--g1);color:var(--g3)"
+      custom
+        ? "정한 기간이 지나면 기간 종료로 표시됩니다. 다시 이 화면에서 기간을 바꿀 수 있습니다."
+        : "달이 바뀌면 새 달로 자동으로 넘어갑니다. 지금은 " +
+            calc.periodLabel({ startDate: month.start, endDate: month.end }) + " 기준입니다."
     );
   }
 
@@ -554,12 +566,16 @@
     text("viewTotalText", calc.formatWon(view.totalAmount));
     text("selCountText", ui.selected.length + "개 선택됨");
 
-    show("viewEmpty", list.length === 0);
-    show("hasRows", list.length > 0);
+    var listMode = ui.historyView === "list";
+    show("viewEmpty", list.length === 0 && (ui.tab !== "history" || listMode));
+    show("hasRows", list.length > 0 && listMode);
     show("hasShares", list.length > 0);
 
-    if (ui.tab === "history") renderGroups(list, view);
-    else renderSummary(view, list, spent);
+    if (ui.tab === "history") {
+      css("calToggle", calToggleStyle());
+      if (listMode) renderGroups(list, view);
+      else renderCalendar(list, view);
+    } else renderSummary(view, list, spent);
   }
 
   function renderGroups(list, view) {
@@ -573,6 +589,118 @@
         .join("")
     );
     paintRows();
+  }
+
+  function calToggleStyle() {
+    var on = ui.historyView === "calendar";
+    return (
+      "flex:0 0 auto;width:32px;height:32px;padding:0;border-radius:9px;display:grid;place-items:center;border:1px solid " +
+      (on ? "var(--fg)" : "var(--g2)") +
+      ";background:" + (on ? "var(--fg)" : "none") +
+      ";color:" + (on ? "var(--bg)" : "var(--fg)")
+    );
+  }
+
+  /* 노션 캘린더처럼, 칸 안에서 그날 쓴 내용이 바로 보이게 한다.
+     좁은 칸이라 금액을 먼저 두고 이모지로 무엇에 썼는지 훑을 수 있게 했다. */
+  function renderCalendar(list, view) {
+    var byDate = calc.indexByDate(list);
+    var period = calc.effectiveBudget(view, today);
+    var grid = calc.monthGrid(ui.calMonth);
+
+    text("calMonthText", calc.monthLabel(ui.calMonth) + " · " + ui.calMonth.slice(0, 4) + "년");
+
+    html(
+      el("calGrid"),
+      grid
+        .map(function (week) {
+          return week
+            .map(function (cell) {
+              var day = byDate[cell.date];
+              var isToday = cell.date === today;
+              var outside = cell.date < period.startDate || cell.date > period.endDate;
+              var dim = !cell.inMonth || outside;
+
+              var num =
+                '<div style="display:flex;align-items:center;gap:3px">' +
+                  '<span style="font-size:11px;font-weight:' + (isToday ? "800" : "600") + ';' +
+                    (isToday
+                      ? "background:var(--fg);color:var(--bg);border-radius:9px;min-width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;padding:0 4px"
+                      : "color:var(--g3)") +
+                  '">' + Number(cell.date.slice(8)) + "</span>" +
+                "</div>";
+
+              var body = "";
+              if (day) {
+                var emojis = day.items
+                  .slice(0, 3)
+                  .map(function (e) {
+                    return esc(calc.resolveCategory(e, data.categories).emoji);
+                  })
+                  .join("");
+                body =
+                  '<div style="font-size:10.5px;font-weight:800;letter-spacing:-.03em;line-height:1.2;word-break:break-all">' +
+                    esc(calc.formatWon(day.sum)) + "</div>" +
+                  '<div style="font-size:10px;line-height:1.2">' + emojis +
+                    (day.items.length > 3 ? '<span style="color:var(--g3)">+' + (day.items.length - 3) + "</span>" : "") +
+                  "</div>";
+              }
+
+              return (
+                '<button class="mm-cal-cell" data-act="openDay" data-date="' + esc(cell.date) + '"' +
+                  (day ? "" : " disabled") +
+                  (dim ? ' style="opacity:.38"' : "") + ">" +
+                  num + body +
+                "</button>"
+              );
+            })
+            .join("");
+        })
+        .join("")
+    );
+  }
+
+  /** 달력에서 고른 날짜의 내역. 여기서도 고치고 지울 수 있다. */
+  function renderDaySheet() {
+    if (!ui.dayOpen) return;
+    var view = viewBudget();
+    if (!view) return;
+    var items = calc
+      .budgetExpenses(data.expenses, view, today)
+      .filter(function (e) {
+        return e.date === ui.dayOpen;
+      });
+
+    text("dayTitle", calc.dayLabel(ui.dayOpen, today));
+    text("daySum", calc.formatWon(calc.sumAmount(items)) + "원");
+
+    html(
+      el("dayList"),
+      items.length
+        ? items
+            .map(function (e) {
+              var c = calc.resolveCategory(e, data.categories);
+              return (
+                '<div style="display:flex;align-items:center;gap:10px;padding:12px 0;border-top:1px solid var(--g1)">' +
+                  '<button data-act="editExpense" data-id="' + esc(e.id) +
+                    '" style="flex:1;min-width:0;display:flex;align-items:center;gap:11px;border:none;background:none;padding:0;text-align:left">' +
+                    '<span style="font-size:19px;width:24px;text-align:center">' + esc(c.emoji) + "</span>" +
+                    '<span style="flex:1;min-width:0">' +
+                      '<span style="display:block;font-size:14px;font-weight:600">' + esc(c.name) + writerTag(e, view) + "</span>" +
+                      (e.memo
+                        ? '<span style="display:block;font-size:12px;color:var(--g3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(e.memo) + "</span>"
+                        : "") +
+                    "</span>" +
+                    '<span style="font-size:15px;font-weight:700;letter-spacing:-.02em">' + esc(calc.formatWon(e.amount)) + "</span>" +
+                  "</button>" +
+                  '<button data-act="removeExpense" data-id="' + esc(e.id) +
+                    '" style="flex:0 0 auto;border:none;background:none;padding:6px 2px;font-size:12px;color:var(--g3)">삭제</button>' +
+                "</div>"
+              );
+            })
+            .join("")
+        : '<div style="padding:26px 0;text-align:center;font-size:13px;color:var(--g3)">이 날은 기록이 없습니다</div>'
+    );
   }
 
   function rowsHTML(g, view) {
@@ -661,36 +789,75 @@
     );
   }
 
+  /* 카테고리 색은 슬롯 순서대로만 준다. 여덟 번째부터는 새 색을 만들지 않고
+     하나로 묶는다 (색이 많아질수록 서로 구별이 안 되기 때문). */
+  var COLOR_SLOTS = 7;
+
+  function categoryColor(rank) {
+    return rank < COLOR_SLOTS ? "var(--c" + (rank + 1) + ")" : "var(--c-other)";
+  }
+
   function renderSummary(view, list, spent) {
+    var shares = calc.categoryShares(list, data.categories);
     var pct = view.totalAmount > 0 ? (spent / view.totalAmount) * 100 : 0;
     text("usedPctText", Math.round(pct) + "%");
-    css(
-      "donut",
-      "position:relative;width:196px;height:196px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:conic-gradient(var(--fg) 0 " +
-        Math.min(100, pct).toFixed(2) + "%, var(--g1) 0)"
-    );
+    css("donut", donutStyle(view, shares, spent));
 
     renderMemberSummary(view, list, spent);
 
     html(
       el("shares"),
-      calc
-        .categoryShares(list, data.categories)
-        .map(function (sh) {
+      shares
+        .map(function (sh, i) {
+          var color = categoryColor(i);
           return (
             '<div style="padding-bottom:16px">' +
               '<div style="display:flex;align-items:center;gap:8px;padding-bottom:6px">' +
+                '<div style="flex:0 0 auto;width:9px;height:9px;border-radius:3px;background:' + color + '"></div>' +
                 '<div style="font-size:16px">' + esc(sh.emoji) + "</div>" +
-                '<div style="flex:1;font-size:13px;font-weight:600">' + esc(sh.name) + "</div>" +
+                '<div style="flex:1;min-width:0;font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(sh.name) + "</div>" +
                 '<div style="font-size:12px;color:var(--g3)">' + sh.pct.toFixed(0) + "%</div>" +
                 '<div style="font-size:13px;font-weight:700;min-width:66px;text-align:right">' + esc(calc.formatWon(sh.amount)) + "원</div>" +
               "</div>" +
-              barHTML(sh.pct) +
+              '<div style="height:8px;border-radius:4px;background:var(--g1);overflow:hidden">' +
+                '<div style="height:100%;width:' + sh.pct.toFixed(2) + '%;background:' + color + '"></div>' +
+              "</div>" +
             "</div>"
           );
         })
         .join("")
     );
+  }
+
+  /**
+   * 도넛 = 예산 안에서 무엇에 얼마를 썼는지.
+   * 색칠된 부분의 크기는 예전처럼 "예산 대비 사용 비율"이고,
+   * 그 안이 카테고리별로 나뉜다. 남은 몫은 연한 회색.
+   * 조각 사이에 배경색 틈을 둬서 비슷한 색이 붙어도 경계가 보인다.
+   */
+  function donutStyle(view, shares, spent) {
+    var base =
+      "position:relative;width:196px;height:196px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:";
+    var denom = Math.max(view.totalAmount, spent);
+    if (!denom || !shares.length) return base + "var(--g1)";
+
+    var GAP = 0.45; // 조각 사이 틈 (%)
+    var stops = [];
+    var at = 0;
+    shares.forEach(function (sh, i) {
+      var width = (sh.amount / denom) * 100;
+      if (width <= 0) return;
+      var color = categoryColor(i);
+      stops.push(color + " " + at.toFixed(3) + "% " + (at + width).toFixed(3) + "%");
+      at += width;
+      if (i < shares.length - 1 && at + GAP < 100) {
+        stops.push("var(--bg) " + at.toFixed(3) + "% " + (at + GAP).toFixed(3) + "%");
+        at += GAP;
+      }
+    });
+    if (at < 100) stops.push("var(--g1) " + at.toFixed(3) + "% 100%");
+
+    return base + "conic-gradient(" + stops.join(",") + ")";
   }
 
   /** 함께 쓰는 예산: 사람별 지출 + 누가 누구에게 얼마를 주면 되는지 */
@@ -758,7 +925,12 @@
     show("isSharedHome", !!active.shared);
     text("sharedBadge", "👥 " + active.memberUids.length);
 
-    text("remainingText", calc.formatWon(s.remaining));
+    show("hasLimit", s.hasLimit);
+    show("noLimit", !s.hasLimit);
+    show("isPersonalHome", calc.isPersonal(active));
+
+    text("mainLabel", s.hasLimit ? "남은 금액" : "쓴 돈");
+    text("remainingText", calc.formatWon(s.hasLimit ? s.remaining : s.spent));
     text("spentText", calc.formatWon(s.spent));
     text("totalText", calc.formatWon(s.total));
 
@@ -768,18 +940,37 @@
         (s.overToday ? STRIPES : "var(--fg)") + ";transition:width .3s ease"
     );
 
-    // 기간이 끝나면 일일 권장액은 숨긴다 (자리는 그대로, 값만 —)
-    text("perDayText", s.ended ? "—" : calc.formatWon(s.perDay));
+    // 한도가 없으면 권장액 대신 하루 평균. 기간이 끝나면 값만 —
+    text("perDayLabel", s.hasLimit ? "오늘 쓸 수 있는 돈" : "하루 평균");
+    text(
+      "perDayText",
+      !s.hasLimit ? calc.formatWon(s.avgPerDay) : s.ended ? "—" : calc.formatWon(s.perDay)
+    );
     text("todaySpentText", calc.formatWon(s.todaySpent));
-    text("daysLeftText", s.ended ? "기간 종료 · 새 예산을 만들어 주세요" : "남은 기간 " + s.daysLeft + "일");
+    text(
+      "daysLeftText",
+      s.ended
+        ? (calc.isPersonal(active) ? "기간 종료 · 설정에서 기간을 바꿔 주세요" : "기간 종료 · 새 예산을 만들어 주세요")
+        : s.hasLimit
+          ? "남은 기간 " + s.daysLeft + "일"
+          : s.elapsedDays + "일째 기록 중"
+    );
 
-    var todays = calc.budgetExpenses(data.expenses, active, today).filter(function (e) {
-      return e.date === today;
+    var inPeriod = calc.budgetExpenses(data.expenses, active, today);
+    var period = calc.effectiveBudget(active, today);
+    var todayInRange = today >= period.startDate && today <= period.endDate;
+    // 기간이 지난 예산에서 "오늘 내역"은 영원히 비어 있다.
+    // 그럴 때는 마지막으로 쓴 날을 대신 보여준다.
+    var pickDate = todayInRange ? today : inPeriod.length ? inPeriod[0].date : today;
+    var picked = inPeriod.filter(function (e) {
+      return e.date === pickDate;
     });
-    show("todayEmpty", todays.length === 0);
+
+    text("todayListTitle", pickDate === today ? "오늘 내역" : calc.dayLabel(pickDate, today) + " 내역");
+    show("todayEmpty", picked.length === 0);
     html(
       el("todayList"),
-      todays
+      picked
         .map(function (e) {
           return expenseRowHTML(e, active);
         })
@@ -1010,6 +1201,7 @@
   function editExpense(id) {
     var e = findExpense(id);
     if (!e) return;
+    ui.dayOpen = null;
     ui.draft = {
       amount: e.amount,
       categoryId: e.categoryId,
@@ -1362,37 +1554,70 @@
       var node = el("nbName");
       if (node) node.focus();
     },
-    /** 나의 가계부 만들기 */
+    /**
+     * 나의 가계부. 없으면 묻지 않고 바로 만들어서 기록을 시작하고,
+     * 이미 있으면 설정(기간·한도) 화면을 연다.
+     */
     openPersonal: function () {
-      var already = store.personalBudget();
-      if (already) {
-        // 이미 있으면 만들지 말고 그리로 데려간다
-        store.setActiveBudget(already.id);
+      var mine = store.personalBudget();
+      if (!mine) {
+        store.addPersonalBudget(today);
         closeSheets();
         ui.tab = "home";
         render();
+        snack("나의 가계부를 시작했습니다. 바로 기록해 보세요.", null);
+        render();
         return;
       }
+      if (data.settings.activeBudgetId !== mine.id) store.setActiveBudget(mine.id);
       closeSheets();
+      ui.tab = "home";
       ui.personalOpen = true;
-      ui.pb = { total: "" };
+      ui.pb = {
+        total: mine.totalAmount ? calc.formatWon(mine.totalAmount) : "",
+        mode: mine.periodMode === "custom" ? "custom" : "month",
+        start: mine.startDate,
+        end: mine.endDate
+      };
       render();
-      var node = el("pbTotal");
-      if (node) node.focus();
     },
     closePersonal: function () {
       ui.personalOpen = false;
       render();
     },
-    createPersonal: function () {
-      var total = calc.parseAmount(ui.pb.total);
-      if (!calc.isValidAmount(total)) return;
-      store.addPersonalBudget(total, today);
-      ui.personalOpen = false;
-      ui.tab = "home";
-      ui.pb = { total: "" };
+    pbModeMonth: function () {
+      ui.pb.mode = "month";
       render();
-      snack("나의 가계부를 시작했습니다", null);
+    },
+    pbModeCustom: function () {
+      ui.pb.mode = "custom";
+      render();
+    },
+    savePersonal: function () {
+      var mine = store.personalBudget();
+      if (!mine) return;
+      if (ui.pb.mode === "custom") {
+        if (!calc.isISODate(ui.pb.start) || !calc.isISODate(ui.pb.end)) {
+          snack("기간을 정확히 골라 주세요", null);
+          render();
+          return;
+        }
+        if (ui.pb.end < ui.pb.start) {
+          snack("종료일이 시작일보다 앞설 수 없습니다", null);
+          render();
+          return;
+        }
+      }
+      store.updatePersonal(mine.id, {
+        totalAmount: calc.parseAmount(ui.pb.total),
+        periodMode: ui.pb.mode,
+        startDate: ui.pb.start,
+        endDate: ui.pb.end,
+        todayIso: today
+      });
+      ui.personalOpen = false;
+      render();
+      snack("저장했습니다", null);
       render();
     },
 
@@ -1425,6 +1650,47 @@
       ui.tab = "summary";
       render();
     },
+    /* --- 달력 --- */
+    toggleCalendar: function () {
+      ui.historyView = ui.historyView === "calendar" ? "list" : "calendar";
+      ui.selMode = false;
+      ui.selected = [];
+      ui.swipedId = null;
+      // 달력을 열 때는 오늘이 있는 달부터 (기간 밖이면 예산이 시작한 달)
+      if (ui.historyView === "calendar") {
+        var view = viewBudget();
+        var period = view ? calc.effectiveBudget(view, today) : null;
+        ui.calMonth =
+          period && (today < period.startDate || today > period.endDate) ? period.startDate : today;
+      }
+      render();
+    },
+    calPrev: function () {
+      ui.calMonth = calc.addMonths(ui.calMonth, -1);
+      render();
+    },
+    calNext: function () {
+      ui.calMonth = calc.addMonths(ui.calMonth, 1);
+      render();
+    },
+    openDay: function (node) {
+      ui.dayOpen = node.getAttribute("data-date");
+      hideSnack();
+      render();
+    },
+    closeDay: function () {
+      ui.dayOpen = null;
+      render();
+    },
+    /** 팝업에서 그 날짜로 바로 지출을 추가한다 */
+    addOnDay: function () {
+      var date = ui.dayOpen;
+      ui.dayOpen = null;
+      openAdd();
+      ui.draft.date = clampToBudget(date);
+      render();
+    },
+
     enterSel: function () { enterSelWith(null); },
     exitSel: function () { ui.selMode = false; ui.selected = []; render(); },
     selectAll: function () {
@@ -1652,6 +1918,7 @@
     ui.shareOpen = false;
     ui.catsOpen = false;
     ui.personalOpen = false;
+    ui.dayOpen = null;
   }
 
   /**
@@ -1715,6 +1982,8 @@
     else if (name === "nbName") ui.nb.name = node.value;
     else if (name === "nbStart") { ui.nb.start = node.value; renderBudgetSheet(); }
     else if (name === "nbEnd") { ui.nb.end = node.value; renderBudgetSheet(); }
+    else if (name === "pbStart") { ui.pb.start = node.value; renderPersonal(); }
+    else if (name === "pbEnd") { ui.pb.end = node.value; renderPersonal(); }
     else if (name === "pbTotal") {
       var pn = calc.parseAmount(node.value);
       ui.pb.total = pn ? calc.formatWon(pn) : "";
@@ -2028,7 +2297,7 @@
     },
     canPull: function () {
       if (ui.addOpen || ui.menuOpen || ui.budgetOpen || ui.catsOpen || ui.shareOpen) return false;
-      if (ui.switcherOpen || ui.personalOpen) return false;
+      if (ui.switcherOpen || ui.personalOpen || ui.dayOpen) return false;
       if (ui.selMode || ui.swipedId) return false;
       var s = auth.state().status;
       return s === "signed-in" || s === "signed-out";
