@@ -364,6 +364,28 @@
   }
 
   /**
+   * 누구와 함께 쓰고 있는지 한 줄로.
+   * 나를 맨 앞에 두고("나"), 너무 많으면 뒤는 "외 N명"으로 접는다.
+   */
+  function memberNames(budget, myUid, max) {
+    var uids = budget && Array.isArray(budget.memberUids) ? budget.memberUids : [];
+    if (!uids.length) return "";
+
+    var limit = max || 3;
+    var ordered = [];
+    if (uids.indexOf(myUid) >= 0) ordered.push(myUid);
+    for (var i = 0; i < uids.length; i++) {
+      if (uids[i] !== myUid) ordered.push(uids[i]);
+    }
+
+    var names = ordered.map(function (u) {
+      return u === myUid ? "나" : memberName(budget, u, "");
+    });
+    if (names.length <= limit) return names.join(" · ");
+    return names.slice(0, limit).join(" · ") + " 외 " + (names.length - limit) + "명";
+  }
+
+  /**
    * 사람별 지출 합계 (많이 쓴 순).
    * 아직 한 푼도 안 쓴 멤버도 0원으로 자기 줄을 갖는다 — 정산에 필요하다.
    */
@@ -515,6 +537,7 @@
     sortCategoriesByUsage: sortCategoriesByUsage,
     UNKNOWN_MEMBER: UNKNOWN_MEMBER,
     memberName: memberName,
+    memberNames: memberNames,
     memberShares: memberShares,
     settlement: settlement,
     periodLabel: periodLabel,

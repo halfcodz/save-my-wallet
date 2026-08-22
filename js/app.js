@@ -923,7 +923,7 @@
 
     text("homeBudgetName", active.name + " · " + budgetPeriodText(active));
     show("isSharedHome", !!active.shared);
-    text("sharedBadge", "👥 " + active.memberUids.length);
+    text("memberLine", calc.memberNames(active, me().uid) + "과 함께 쓰는 중");
 
     show("hasLimit", s.hasLimit);
     show("noLimit", !s.hasLimit);

@@ -660,7 +660,9 @@ async function wait(ms) {
 
   eq("상대가 쓴 돈까지 합산된다", txt("remainingText"), "280,000");
   ok("함께 쓰는 예산 표시가 뜬다", visible("isSharedHome"));
-  eq("멤버 수 배지", txt("sharedBadge"), "👥 2");
+  eq("누구와 함께 쓰는지 이름이 보인다", txt("memberLine"), "나 · 예은과 함께 쓰는 중");
+  ok("이름 줄을 누르면 멤버 관리로 갈 수 있다",
+    doc.querySelector('[data-show="isSharedHome"][data-act="openShare"]') !== null);
   ok("오늘 내역에 상대 이름이 보인다", el("todayList").textContent.includes("예은"));
 
   /* --- 8. 요약: 사람별 + 정산 --- */

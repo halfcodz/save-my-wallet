@@ -337,6 +337,17 @@
       totalAmount: 1000, ownerUid: "u1", memberUids: ["u1"], inviteCode: "짧음"
     }).inviteCode, null);
 
+    eq("함께: 나를 앞에 두고 이름을 나열", calc.memberNames(trip, "u2"), "나 · 지민 · 하늘");
+    eq("함께: 나도 이름으로 보이지 않는다", calc.memberNames(trip, "u1"), "나 · 예은 · 하늘");
+    eq("함께: 혼자면 나만", calc.memberNames(solo, "u1"), "나");
+    eq("함께: 남의 예산이면 나는 빠진다", calc.memberNames(trip, "없는uid"), "지민 · 예은 · 하늘");
+    eq("함께: 많으면 뒤를 접는다", calc.memberNames({
+      memberUids: ["u1", "u2", "u3", "u4", "u5"],
+      members: { u1: { name: "지민" }, u2: { name: "예은" }, u3: { name: "하늘" }, u4: { name: "도윤" }, u5: { name: "서아" } }
+    }, "u1"), "나 · 예은 · 하늘 외 2명");
+    eq("함께: 멤버가 없으면 빈 문자열", calc.memberNames({}, "u1"), "");
+    eq("함께: 이름 없는 사람도 자리는 있다", calc.memberNames({ memberUids: ["u1", "u9"], members: { u1: { name: "지민" } } }, "u1"), "나 · 알 수 없음");
+
     var tripExp = [
       { uid: "u1", amount: 60000 },
       { uid: "u2", amount: 30000 }
