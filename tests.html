@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>계산 검증</title>
+<style>
+  :root { --bg:#fff; --fg:#111; --g3:#767676; --g2:#dcdcdc; --g1:#f3f3f3; }
+  body { margin:0; padding:20px; font:14px/1.5 -apple-system,"Apple SD Gothic Neo",sans-serif;
+         color:var(--fg); background:var(--bg); font-feature-settings:"tnum"; }
+  h1 { font-size:17px; margin:0 0 14px; }
+  #sum { font-size:15px; font-weight:700; padding:12px 14px; border-radius:12px;
+         background:var(--g1); margin-bottom:16px; }
+  #sum.bad { background:var(--fg); color:var(--bg); }
+  ul { list-style:none; margin:0; padding:0; }
+  li { padding:6px 0; border-top:1px solid var(--g1); display:flex; gap:10px; align-items:baseline; }
+  .m { flex:0 0 18px; font-weight:800; }
+  .f { color:var(--g3); }
+  .d { font-size:12px; color:var(--g3); padding-left:28px; word-break:break-all; }
+</style>
+</head>
+<body>
+<h1>가계부 계산 검증</h1>
+<div id="sum">실행 중…</div>
+<ul id="list"></ul>
+
+<script src="js/calc.js"></script>
+<script src="js/store.js"></script>
+<script src="js/tests.js"></script>
+<script>
+  var results = MP.tests.run();
+  var failed = results.filter(function (r) { return !r.ok; });
+  var sum = document.getElementById("sum");
+  sum.textContent = (results.length - failed.length) + " / " + results.length + " 통과"
+    + (failed.length ? " · " + failed.length + "건 실패" : "");
+  if (failed.length) sum.className = "bad";
+
+  var list = document.getElementById("list");
+  results.forEach(function (r) {
+    var li = document.createElement("li");
+    li.innerHTML = '<span class="m">' + (r.ok ? "✓" : "✗") + '</span><span>' + r.name + '</span>';
+    if (!r.ok) {
+      li.className = "f";
+      var d = document.createElement("div");
+      d.className = "d";
+      d.textContent = "받은 값 " + r.actual + " / 기대 " + r.expected;
+      li.appendChild(d);
+    }
+    list.appendChild(li);
+  });
+</script>
+</body>
+</html>

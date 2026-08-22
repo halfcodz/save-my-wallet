@@ -1,0 +1,34 @@
+/* 디자인 원본(helmet)의 스타일 — 값 변경 없음 */
+:root { --bg:#ffffff; --fg:#111111; --g3:#767676; --g2:#dcdcdc; --g1:#f3f3f3; color-scheme: light; }
+html[data-mm="dark"] { --bg:#0a0a0a; --fg:#f4f4f4; --g3:#8f8f8f; --g2:#333333; --g1:#191919; color-scheme: dark; }
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin:0; padding:0; background: var(--g1); }
+body { font-family: "Pretendard Variable", Pretendard, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; color: var(--fg); font-feature-settings: "tnum"; }
+button, input { font-family: inherit; color: inherit; }
+input { background: transparent; }
+a { color: var(--fg); text-decoration: underline; }
+a:hover { color: var(--g3); }
+@keyframes mmUp { from { transform: translateY(16px); opacity: 0 } to { transform: none; opacity: 1 } }
+
+/* ---- 아래는 로직을 붙이면서 필요해진 것들. 디자인 값은 건드리지 않는다. ---- */
+
+/* sc-if 대체: display 인라인 스타일(flex/grid)을 보존한 채 숨긴다 */
+.mm-hide { display: none !important; }
+
+/* 큰 금액이 줄바꿈되지 않게. 넘칠 때만 JS가 폰트를 줄인다. */
+.mm-fit { white-space: nowrap; }
+
+/* 비활성 버튼: 색은 이미 인라인 스타일로 회색 처리되어 있고, 입력만 막는다 */
+button[disabled] { cursor: default; }
+
+/* 네이티브 date 입력이 iOS에서 제멋대로 넓어지는 것 방지 */
+input[type="date"] { -webkit-appearance: none; appearance: none; min-width: 0; }
+
+/* 스크롤 관성 + 가로 스크롤 바 숨김 (칩 줄) */
+[data-el="budgetChips"], [data-el="budgetChipsSummary"] { -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+[data-el="budgetChips"]::-webkit-scrollbar, [data-el="budgetChipsSummary"]::-webkit-scrollbar { display: none; }
+
+/* 아이폰 홈 인디케이터 영역에서 잘리지 않게 */
+@supports (padding: max(0px)) {
+  [data-el="fabWrap"] { padding-bottom: env(safe-area-inset-bottom); }
+}
