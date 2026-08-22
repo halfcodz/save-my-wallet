@@ -463,7 +463,7 @@ async function wait(ms) {
   eq("다시 넣은 금액", txt("remainingText"), "370,000");
 
   /* --- 5.5 예산 고르기 시트 --- */
-  eq("메인에 지금 예산 이름이 보인다", txt("homeBudgetName"), "부산 여행");
+  eq("메인에 예산 이름과 기간이 보인다", txt("homeBudgetName"), "부산 여행 · 8/20–8/23");
 
   click('[data-act="openSwitcher"]');
   await tick(4);
@@ -471,6 +471,10 @@ async function wait(ms) {
   ok("지금 예산에 체크가 있다", el("switcherList").textContent.includes("✓"));
   ok("예산 이름이 나온다", el("switcherList").textContent.includes("부산 여행"));
   ok("기간과 쓴 금액도 같이 보인다", el("switcherList").textContent.includes("8/20"));
+  ok("나의 가계부 구역이 있다", el("switcherList").textContent.includes("나의 가계부"));
+  ok("아직 없으면 만들기를 권한다", el("switcherList").textContent.includes("나의 가계부 만들기"));
+  ok("여행 구역으로 나뉜다", el("switcherList").textContent.includes("여행"));
+  ok("진행 중 표시가 붙는다", el("switcherList").textContent.includes("진행 중"));
 
   // 여기서 곧장 새 예산으로 갈 수 있다
   click('[data-el="switcherSheet"] [data-act="newBudget"]');
@@ -506,7 +510,7 @@ async function wait(ms) {
   await tick(2);
   click('[data-act="createBudget"]');
   await tick(10);
-  eq("새 예산으로 바뀐다", txt("homeBudgetName"), "생활비");
+  eq("새 예산으로 바뀐다", txt("homeBudgetName"), "생활비 · 8/1–8/31");
 
   click('[data-act="openSwitcher"]');
   await tick(4);
@@ -515,22 +519,77 @@ async function wait(ms) {
   const busanRow = [...rows].find((r) => r.textContent.includes("부산 여행"));
   click(busanRow);
   await tick(10);
-  eq("한 번 눌러 예산이 바뀐다", txt("homeBudgetName"), "부산 여행");
+  eq("한 번 눌러 예산이 바뀐다", txt("homeBudgetName"), "부산 여행 · 8/20–8/23");
   ok("고르면 시트가 닫힌다", !visible("switcherOpen"));
   eq("바뀐 예산의 금액이 보인다", txt("remainingText"), "370,000");
 
-  // 내역 탭 칩줄 끝의 ＋ 로도 열린다
+  // 내역 화면: 예산 칩 줄은 사라지고, 오늘이 카드로 강조된다
   click('[data-act="goHistory"]');
-  await tick(5);
-  const plus = doc.querySelector('[data-el="budgetChips"] [data-act="openSwitcher"]');
-  ok("칩 줄 끝에 ＋ 가 있다", !!plus && plus.textContent === "＋");
-  click(plus);
-  await tick(4);
-  ok("＋ 로도 예산 고르기가 열린다", visible("switcherOpen"));
-  click('[data-act="closeSwitcher"]');
-  await tick(3);
+  await tick(6);
+  ok("내역 상단에 예산 칩 줄이 없다", !doc.querySelector('[data-el="budgetChips"]'));
+  ok("내역 상단에 예산 이름이 없다", !txt("viewPeriodText").includes("부산 여행"));
+  eq("기간만 남는다", txt("viewPeriodText"), "8/20–8/23");
+  const todayCard = doc.querySelector('[data-el="groups"] > div');
+  ok("오늘이 첫 묶음이다", todayCard.textContent.includes("오늘"));
+  ok("오늘 묶음은 테두리로 강조된다", todayCard.getAttribute("style").includes("border:1px solid var(--fg)"));
+  ok("오늘 합계가 크게 보인다", todayCard.textContent.includes("30,000"));
+  ok("오늘 몇 건인지 보인다", todayCard.textContent.includes("1건"));
+  ok("내역 아래에 전체 삭제가 있다", !!doc.querySelector('[data-act="deleteAllInHistory"]'));
   click('[data-act="goHome"]');
   await tick(4);
+
+  // 설정에서 새로고침 / 캐시 비우기 / 내역 전체 삭제는 빠졌다
+  click('[data-act="openMenu"]');
+  await tick(3);
+  ok("메뉴에 새로고침이 없다", !doc.querySelector('[data-act="menuRefresh"]'));
+  ok("메뉴에 앱 새로 받기가 없다", !doc.querySelector('[data-act="hardReset"]'));
+  ok("메뉴에 내역 전체 삭제가 없다", !doc.querySelector('[data-act="deleteAllFromMenu"]'));
+  click('[data-act="closeMenu"]');
+  await tick(3);
+
+  // 나의 가계부
+  click('[data-act="openSwitcher"]');
+  await tick(4);
+  click('[data-el="switcherList"] [data-act="openPersonal"]');
+  await tick(5);
+  ok("나의 가계부 만들기가 열린다", visible("personalOpen"));
+  ok("금액을 넣기 전에는 시작할 수 없다", el("createPersonal").disabled === true);
+  type("pbTotal", "600000");
+  await tick(3);
+  ok("금액을 넣으면 시작할 수 있다", el("createPersonal").disabled === false);
+  ok("이번 달 기준임을 알려 준다", txt("pbHint").includes("달이 바뀌면"));
+  click('[data-act="createPersonal"]');
+  await tick(12);
+
+  ok("나의 가계부로 들어온다", visible("hasBudget"));
+  ok("메인에 나의 가계부와 이번 달이 보인다", txt("homeBudgetName").indexOf("나의 가계부 · ") === 0, txt("homeBudgetName"));
+  const personalPath = [...fake.docs.keys()].find(
+    (k) => k.startsWith("budgets/") && k.split("/").length === 2 && fake.docs.get(k).kind === "personal"
+  );
+  ok("나의 가계부 문서가 생긴다", !!personalPath);
+  eq("한 달 예산이 저장된다", fake.docs.get(personalPath).totalAmount, 600000);
+  eq("이번 달로 시작한다", fake.docs.get(personalPath).startDate, win.MP.calc.monthBounds(win.MP.calc.todayISO()).start);
+  eq("남은 금액은 아직 한 달 예산 그대로", txt("remainingText"), "600,000");
+
+  // 나의 가계부는 함께 쓸 수 없다
+  click('[data-act="openShare"]');
+  await tick(4);
+  click('[data-act="createInvite"]');
+  await tick(8);
+  ok("나의 가계부는 초대할 수 없다고 알려 준다", visible("shareError") && txt("shareErrorText").includes("혼자"), txt("shareErrorText"));
+  click('[data-act="closeShare"]');
+  await tick(3);
+
+  // 다시 여행 예산으로 돌아온다
+  click('[data-act="openSwitcher"]');
+  await tick(4);
+  ok("두 구역이 모두 보인다", el("switcherList").textContent.includes("나의 가계부") &&
+     el("switcherList").textContent.includes("부산 여행"));
+  const backRow = [...doc.querySelectorAll('[data-el="switcherList"] [data-act="pickBudget"]')]
+    .find((r) => r.textContent.includes("부산 여행"));
+  click(backRow);
+  await tick(10);
+  eq("여행 예산으로 돌아온다", txt("homeBudgetName"), "부산 여행 · 8/20–8/23");
 
   /* --- 6. 초대 코드 --- */
   click('[data-act="openShare"]');
@@ -570,7 +629,7 @@ async function wait(ms) {
       categoryName: "숙박",
       categoryEmoji: "🛏",
       memo: "게스트하우스",
-      date: new win.Date().toISOString().slice(0, 10),
+      date: win.MP.calc.todayISO(),
       createdAt: 2,
       uid: "uid_9",
       userName: "예은"
@@ -579,7 +638,7 @@ async function wait(ms) {
 
   eq("상대가 쓴 돈까지 합산된다", txt("remainingText"), "280,000");
   ok("함께 쓰는 예산 표시가 뜬다", visible("isSharedHome"));
-  eq("멤버 수 배지", txt("sharedBadge"), "👥 2명");
+  eq("멤버 수 배지", txt("sharedBadge"), "👥 2");
   ok("오늘 내역에 상대 이름이 보인다", el("todayList").textContent.includes("예은"));
 
   /* --- 8. 요약: 사람별 + 정산 --- */

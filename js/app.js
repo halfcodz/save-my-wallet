@@ -18,7 +18,6 @@
 
   var ui = {
     tab: "home",
-    viewId: null,
     selMode: false,
     selected: [],
     swipedId: null,
@@ -28,11 +27,13 @@
     shareOpen: false,
     menuOpen: false,
     switcherOpen: false,
+    personalOpen: false,
     snack: null,
     snackTimer: null,
     updateReady: false,
     draft: { amount: 0, categoryId: null, memo: "", date: today, editingId: null },
     nb: { name: "", start: today, end: calc.addDays(today, 6), total: "" },
+    pb: { total: "" },
     auth: { mode: "login", email: "", password: "", name: "", error: "", busy: false },
     share: { code: "", error: "", busy: false }
   };
@@ -289,6 +290,7 @@
     show("catsOpen", ui.catsOpen);
     show("shareOpen", ui.shareOpen);
     show("switcherOpen", ui.switcherOpen);
+    show("personalOpen", ui.personalOpen);
     show("snackOpen", !!ui.snack);
     show("snackUndo", !!(ui.snack && ui.snack.undo));
     show("editing", !!ui.draft.editingId);
@@ -320,36 +322,106 @@
     renderCats();
     renderShare();
     renderSwitcher();
+    renderPersonal();
   }
 
-  /** 예산 고르기 시트 — 바꾸기 / 새로 만들기 / 초대 코드로 참여를 한자리에 */
+  /** 화면에 보이는 기간. 나의 가계부는 이번 달. */
+  function budgetPeriodText(b) {
+    return calc.periodLabel(calc.effectiveBudget(b, today));
+  }
+
+  /** 지금 어떤 상태인지 한 단어로 */
+  function budgetStateLabel(b) {
+    if (calc.isPersonal(b)) return calc.monthLabel(today);
+    var st = calc.budgetStatus(b, today);
+    return st === "active" ? "진행 중" : st === "upcoming" ? "예정" : "종료";
+  }
+
+  function switcherRowHTML(b, activeId) {
+    var on = b.id === activeId;
+    var st = calc.computeBudgetStats(b, data.expenses, today);
+    return (
+      '<button data-act="pickBudget" data-id="' + esc(b.id) +
+        '" style="display:flex;align-items:center;gap:12px;width:100%;text-align:left;border:none;background:none;padding:11px 16px">' +
+        '<span style="flex:0 0 auto;width:20px;text-align:center;font-size:13px;font-weight:800">' +
+          (on ? "✓" : "") + "</span>" +
+        '<span style="flex:1;min-width:0">' +
+          '<span style="display:block;font-size:15px;font-weight:' + (on ? "700" : "600") +
+            ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
+            esc((b.shared ? "👥 " : "") + b.name) + "</span>" +
+          '<span style="display:block;font-size:11px;color:var(--g3);margin-top:3px">' +
+            esc(budgetPeriodText(b) + " · " + calc.formatWon(st.spent) + " / " +
+                calc.formatWon(b.totalAmount) + "원") + "</span>" +
+        "</span>" +
+        '<span style="flex:0 0 auto;font-size:10px;font-weight:700;color:var(--g3)">' +
+          esc(budgetStateLabel(b)) + "</span>" +
+      "</button>"
+    );
+  }
+
+  function switcherHeadHTML(label) {
+    return '<div style="font-size:11px;color:var(--g3);padding:10px 16px 2px">' + esc(label) + "</div>";
+  }
+
+  /** 예산 고르기 시트 — 나의 가계부와 여행을 나눠 보여준다 */
   function renderSwitcher() {
     if (!ui.switcherOpen) return;
     var activeId = data.settings.activeBudgetId;
 
-    html(
-      el("switcherList"),
-      data.budgets
+    var personal = null;
+    var trips = [];
+    data.budgets.forEach(function (b) {
+      if (calc.isPersonal(b)) personal = b;
+      else trips.push(b);
+    });
+
+    // 진행 중 -> 예정 -> 종료 순. 같은 상태끼리는 최근에 만든 것부터.
+    var rank = { active: 0, upcoming: 1, ended: 2 };
+    trips.sort(function (a, b) {
+      var d = rank[calc.budgetStatus(a, today)] - rank[calc.budgetStatus(b, today)];
+      if (d !== 0) return d;
+      return b.createdAt - a.createdAt;
+    });
+
+    var out = switcherHeadHTML("나의 가계부");
+    out += personal
+      ? switcherRowHTML(personal, activeId)
+      : '<button data-act="openPersonal" style="display:flex;align-items:center;gap:12px;width:100%;text-align:left;border:none;background:none;padding:11px 16px">' +
+          '<span style="flex:0 0 auto;width:20px;text-align:center;font-size:16px">＋</span>' +
+          '<span style="flex:1;min-width:0">' +
+            '<span style="display:block;font-size:15px;font-weight:600">나의 가계부 만들기</span>' +
+            '<span style="display:block;font-size:11px;color:var(--g3);margin-top:3px">여행과 따로, 달마다 이어지는 가계부</span>' +
+          "</span></button>";
+
+    if (trips.length) {
+      out += switcherHeadHTML("여행");
+      out += trips
         .map(function (b) {
-          var on = b.id === activeId;
-          var st = calc.computeBudgetStats(b, data.expenses, today);
-          return (
-            '<button data-act="pickBudget" data-id="' + esc(b.id) +
-              '" style="display:flex;align-items:center;gap:12px;width:100%;text-align:left;border:none;background:none;padding:11px 16px">' +
-              '<span style="flex:0 0 auto;width:22px;text-align:center;font-size:13px;font-weight:800">' +
-                (on ? "✓" : "") + "</span>" +
-              '<span style="flex:1;min-width:0">' +
-                '<span style="display:block;font-size:15px;font-weight:' + (on ? "700" : "600") +
-                  ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
-                  esc((b.shared ? "👥 " : "") + b.name) + "</span>" +
-                '<span style="display:block;font-size:11px;color:var(--g3);margin-top:3px">' +
-                  esc(calc.periodLabel(b) + " · " + calc.formatWon(st.spent) + " / " +
-                      calc.formatWon(b.totalAmount) + "원") + "</span>" +
-              "</span>" +
-            "</button>"
-          );
+          return switcherRowHTML(b, activeId);
         })
-        .join("")
+        .join("");
+    }
+
+    html(el("switcherList"), out);
+  }
+
+  /** 나의 가계부 만들기 시트 */
+  function renderPersonal() {
+    if (!ui.personalOpen) return;
+    value(el("pbTotal"), ui.pb.total);
+    var month = calc.monthBounds(today);
+    text(
+      "pbHint",
+      "달이 바뀌면 새 달로 자동으로 넘어갑니다. 지금은 " +
+        calc.periodLabel({ startDate: month.start, endDate: month.end }) + " 기준입니다."
+    );
+    var ok = calc.isValidAmount(calc.parseAmount(ui.pb.total));
+    var base = "margin-top:16px;width:100%;height:52px;border:none;border-radius:13px;font-size:16px;font-weight:700;background:";
+    disable(
+      el("createPersonal"),
+      !ok,
+      base + "var(--fg);color:var(--bg)",
+      base + "var(--g1);color:var(--g3)"
     );
   }
 
@@ -461,24 +533,9 @@
 
   /* ----- 내역/요약이 바라보는 예산 ----- */
 
+  /* 모든 화면이 같은 예산을 본다. 바꾸는 곳은 '예산 고르기' 하나뿐. */
   function viewBudget() {
-    return findBudget(ui.viewId) || activeBudget();
-  }
-
-  function chipsHTML(selectedId) {
-    return (
-      data.budgets
-        .map(function (b) {
-          return (
-            '<button data-act="selectView" data-id="' + esc(b.id) + '" style="' + chipStyle(b.id === selectedId) + '">' +
-            esc((b.shared ? "👥 " : "") + b.name + " " + calc.periodLabel(b)) + "</button>"
-          );
-        })
-        .join("") +
-      // 칩 줄 끝의 ＋ — 여기서도 새 예산과 여행 참여로 갈 수 있다
-      '<button data-act="openSwitcher" aria-label="예산 추가" style="' + chipStyle(false) +
-        ';flex:0 0 auto;padding:7px 14px;font-size:14px;line-height:1">＋</button>'
-    );
+    return activeBudget();
   }
 
   function renderView() {
@@ -486,13 +543,10 @@
     var view = viewBudget();
     if (!view) return;
 
-    var list = calc.expensesOfBudget(data.expenses, view.id);
+    var list = calc.budgetExpenses(data.expenses, view, today);
     var spent = calc.sumAmount(list);
 
-    html(el("budgetChips"), chipsHTML(view.id));
-    html(el("budgetChipsSummary"), chipsHTML(view.id));
-
-    var periodText = view.name + " " + calc.periodLabel(view);
+    var periodText = calc.periodLabel(calc.effectiveBudget(view, today));
     text("viewPeriodText", periodText);
     text("viewPeriodText2", periodText);
     text("viewSpentText", calc.formatWon(spent));
@@ -514,23 +568,48 @@
       el("groups"),
       groups
         .map(function (g) {
-          return (
-            '<div style="padding-bottom:18px">' +
-              '<div style="display:flex;justify-content:space-between;align-items:baseline;padding:10px 0 4px">' +
-                '<div style="font-size:12px;font-weight:700;color:var(--g3)">' + esc(calc.dayLabel(g.date, today)) + "</div>" +
-                '<div style="font-size:12px;color:var(--g3)">' + esc(calc.formatWon(g.sum)) + "원</div>" +
-              "</div>" +
-              g.items
-                .map(function (e) {
-                  return swipeRowHTML(e, view);
-                })
-                .join("") +
-            "</div>"
-          );
+          return g.date === today ? todayGroupHTML(g, view) : dayGroupHTML(g, view);
         })
         .join("")
     );
     paintRows();
+  }
+
+  function rowsHTML(g, view) {
+    return g.items
+      .map(function (e) {
+        return swipeRowHTML(e, view);
+      })
+      .join("");
+  }
+
+  function dayGroupHTML(g, view) {
+    return (
+      '<div style="padding-bottom:18px">' +
+        '<div style="display:flex;justify-content:space-between;align-items:baseline;padding:10px 0 4px">' +
+          '<div style="font-size:12px;font-weight:700;color:var(--g3)">' + esc(calc.dayLabel(g.date, today)) + "</div>" +
+          '<div style="font-size:12px;color:var(--g3)">' + esc(calc.formatWon(g.sum)) + "원</div>" +
+        "</div>" +
+        rowsHTML(g, view) +
+      "</div>"
+    );
+  }
+
+  /* 오늘 쓴 것이 제일 궁금하다. 테두리를 둘러 목록에서 먼저 눈에 띄게 한다. */
+  function todayGroupHTML(g, view) {
+    return (
+      '<div style="border:1px solid var(--fg);border-radius:16px;padding:2px 14px 10px;margin:2px 0 20px">' +
+        '<div style="display:flex;justify-content:space-between;align-items:baseline;padding:13px 0 7px">' +
+          '<div style="font-size:14px;font-weight:800;letter-spacing:-.01em">오늘' +
+            '<span style="font-size:11px;font-weight:600;color:var(--g3);margin-left:7px">' +
+              esc(calc.dayLabel(g.date, null)) + "</span></div>" +
+          '<div style="font-size:19px;font-weight:800;letter-spacing:-.03em">' + esc(calc.formatWon(g.sum)) +
+            '<span style="font-size:12px;font-weight:600;color:var(--g3);margin-left:2px">원</span></div>' +
+        "</div>" +
+        rowsHTML(g, view) +
+        '<div style="font-size:11px;color:var(--g3);padding-top:9px">' + g.items.length + "건</div>" +
+      "</div>"
+    );
   }
 
   function swipeRowHTML(e, budget) {
@@ -675,9 +754,9 @@
   function renderHome(active) {
     var s = calc.computeBudgetStats(active, data.expenses, today);
 
-    text("homeBudgetName", active.name);
+    text("homeBudgetName", active.name + " · " + budgetPeriodText(active));
     show("isSharedHome", !!active.shared);
-    text("sharedBadge", "👥 " + active.memberUids.length + "명");
+    text("sharedBadge", "👥 " + active.memberUids.length);
 
     text("remainingText", calc.formatWon(s.remaining));
     text("spentText", calc.formatWon(s.spent));
@@ -694,7 +773,7 @@
     text("todaySpentText", calc.formatWon(s.todaySpent));
     text("daysLeftText", s.ended ? "기간 종료 · 새 예산을 만들어 주세요" : "남은 기간 " + s.daysLeft + "일");
 
-    var todays = calc.expensesOfBudget(data.expenses, active.id).filter(function (e) {
+    var todays = calc.budgetExpenses(data.expenses, active, today).filter(function (e) {
       return e.date === today;
     });
     show("todayEmpty", todays.length === 0);
@@ -721,8 +800,9 @@
     var dateInput = el("draftDate");
     if (dateInput && active) {
       // 이 예산 기간 안에서만 고를 수 있게 (기간 밖 지출이 합계에 섞이는 혼란 방지)
-      dateInput.min = active.startDate;
-      dateInput.max = active.endDate;
+      var period = calc.effectiveBudget(active, today);
+      dateInput.min = period.startDate;
+      dateInput.max = period.endDate;
     }
 
     css(
@@ -921,8 +1001,9 @@
   function clampToBudget(date) {
     var b = activeBudget();
     if (!b) return date;
-    if (date < b.startDate) return b.startDate;
-    if (date > b.endDate) return b.endDate;
+    var e = calc.effectiveBudget(b, today);
+    if (date < e.startDate) return e.startDate;
+    if (date > e.endDate) return e.endDate;
     return date;
   }
 
@@ -1045,7 +1126,6 @@
     });
     ui.budgetOpen = false;
     ui.tab = "home";
-    ui.viewId = id;
     ui.nb = { name: "", start: today, end: calc.addDays(today, 6), total: "" };
     render();
   }
@@ -1267,7 +1347,6 @@
     pickBudget: function (node) {
       var id = node.getAttribute("data-id");
       store.setActiveBudget(id);
-      ui.viewId = id;
       ui.switcherOpen = false;
       ui.selMode = false;
       ui.selected = [];
@@ -1283,6 +1362,40 @@
       var node = el("nbName");
       if (node) node.focus();
     },
+    /** 나의 가계부 만들기 */
+    openPersonal: function () {
+      var already = store.personalBudget();
+      if (already) {
+        // 이미 있으면 만들지 말고 그리로 데려간다
+        store.setActiveBudget(already.id);
+        closeSheets();
+        ui.tab = "home";
+        render();
+        return;
+      }
+      closeSheets();
+      ui.personalOpen = true;
+      ui.pb = { total: "" };
+      render();
+      var node = el("pbTotal");
+      if (node) node.focus();
+    },
+    closePersonal: function () {
+      ui.personalOpen = false;
+      render();
+    },
+    createPersonal: function () {
+      var total = calc.parseAmount(ui.pb.total);
+      if (!calc.isValidAmount(total)) return;
+      store.addPersonalBudget(total, today);
+      ui.personalOpen = false;
+      ui.tab = "home";
+      ui.pb = { total: "" };
+      render();
+      snack("나의 가계부를 시작했습니다", null);
+      render();
+    },
+
     /** 어느 화면에서 눌러도 곧장 초대 코드 입력으로 */
     joinTrip: function () {
       closeSheets();
@@ -1296,57 +1409,37 @@
       render();
     },
     createBudget: createBudget,
-    menuRefresh: function () {
-      ui.menuOpen = false;
-      render();
-      MP.pullToRefresh.trigger();
-    },
     applyUpdate: function () {
-      if (!MP.updater.apply()) {
-        ui.updateReady = false;
-        render();
-      }
-    },
-    hardReset: function () {
-      if (!confirm("앱 파일을 모두 지우고 새로 받습니다.\n\n기록은 계정에 저장돼 있어서 사라지지 않습니다.\n계속할까요?")) return;
-      MP.updater.hardReset();
+      // 갈아탈 워커가 사라졌다면 캐시를 비우고 새로 받는 것이 확실한 복구다
+      if (!MP.updater.apply()) MP.updater.hardReset();
     },
 
     /* --- 탭 --- */
     goHome: function () { ui.tab = "home"; ui.swipedId = null; ui.selMode = false; ui.selected = []; render(); },
     goHistory: function () {
       ui.tab = "history";
-      if (!findBudget(ui.viewId)) ui.viewId = data.settings.activeBudgetId;
       ui.selMode = false; ui.selected = []; ui.swipedId = null;
       render();
     },
     goSummary: function () {
       ui.tab = "summary";
-      if (!findBudget(ui.viewId)) ui.viewId = data.settings.activeBudgetId;
       render();
     },
-    selectView: function (node) {
-      ui.viewId = node.getAttribute("data-id");
-      ui.selMode = false; ui.selected = []; ui.swipedId = null;
-      render();
-    },
-
     enterSel: function () { enterSelWith(null); },
     exitSel: function () { ui.selMode = false; ui.selected = []; render(); },
     selectAll: function () {
       var view = viewBudget();
       if (!view) return;
-      ui.selected = calc.expensesOfBudget(data.expenses, view.id).map(function (e) { return e.id; });
+      ui.selected = calc.budgetExpenses(data.expenses, view, today).map(function (e) { return e.id; });
       paintRows();
       text("selCountText", ui.selected.length + "개 선택됨");
     },
     deleteSelected: function () { removeMany(ui.selected.slice()); },
 
-    deleteAllFromMenu: function () {
+    deleteAllInHistory: function () {
       var view = viewBudget();
-      ui.menuOpen = false;
       if (!view) { render(); return; }
-      var ids = calc.expensesOfBudget(data.expenses, view.id).map(function (e) { return e.id; });
+      var ids = calc.budgetExpenses(data.expenses, view, today).map(function (e) { return e.id; });
       if (!ids.length) {
         render();
         snack("지울 내역이 없습니다", null);
@@ -1367,7 +1460,6 @@
     activateBudget: function (node) {
       var id = node.getAttribute("data-id");
       store.setActiveBudget(id);
-      ui.viewId = id;
       ui.budgetOpen = false;
       ui.tab = "home";
       render();
@@ -1389,7 +1481,6 @@
         "\n되돌릴 수 없습니다. 계속할까요?";
       if (!confirm(msg)) return;
       store.removeBudget(id);
-      if (ui.viewId === id) ui.viewId = null;
       render();
     },
     leaveBudgetFromList: function (node) {
@@ -1483,7 +1574,6 @@
           ui.share.code = "";
           ui.shareOpen = false;
           ui.tab = "home";
-          ui.viewId = r.budgetId;
           snack(r.alreadyMember ? "이미 함께 쓰고 있는 가계부입니다" : "여행 가계부에 참여했습니다", null);
           render();
         },
@@ -1561,6 +1651,7 @@
     ui.budgetOpen = false;
     ui.shareOpen = false;
     ui.catsOpen = false;
+    ui.personalOpen = false;
   }
 
   /**
@@ -1594,7 +1685,6 @@
     store.leaveBudget(id).then(
       function () {
         ui.shareOpen = false;
-        if (ui.viewId === id) ui.viewId = null;
         snack("나왔습니다", null);
         render();
       },
@@ -1625,6 +1715,12 @@
     else if (name === "nbName") ui.nb.name = node.value;
     else if (name === "nbStart") { ui.nb.start = node.value; renderBudgetSheet(); }
     else if (name === "nbEnd") { ui.nb.end = node.value; renderBudgetSheet(); }
+    else if (name === "pbTotal") {
+      var pn = calc.parseAmount(node.value);
+      ui.pb.total = pn ? calc.formatWon(pn) : "";
+      node.value = ui.pb.total;
+      renderPersonal();
+    }
     else if (name === "nbTotal") {
       var n = calc.parseAmount(node.value);
       ui.nb.total = n ? calc.formatWon(n) : "";
@@ -1824,7 +1920,6 @@
   store.subscribe(function (next) {
     data = next;
     uiTheme = data.settings.theme;
-    if (!findBudget(ui.viewId)) ui.viewId = data.settings.activeBudgetId;
     render();
     maybeOfferLegacyImport();
   });
@@ -1843,7 +1938,6 @@
       data = store.get();
       uiTheme = data.settings.theme;
       ui.tab = "home";
-      ui.viewId = null;
       ui.addOpen = false;
       closeSheets();
       ui.selMode = false;
@@ -1934,7 +2028,7 @@
     },
     canPull: function () {
       if (ui.addOpen || ui.menuOpen || ui.budgetOpen || ui.catsOpen || ui.shareOpen) return false;
-      if (ui.switcherOpen) return false;
+      if (ui.switcherOpen || ui.personalOpen) return false;
       if (ui.selMode || ui.swipedId) return false;
       var s = auth.state().status;
       return s === "signed-in" || s === "signed-out";

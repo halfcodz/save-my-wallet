@@ -17,6 +17,7 @@
   var INVITE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   var INVITE_LENGTH = 8;
   var MAX_MEMBERS = 20;
+  var PERSONAL_NAME = "나의 가계부";
 
   var DEFAULT_CATEGORIES = [
     ["🍚", "식사"], ["🍩", "카페/간식"], ["🍺", "술"], ["🚌", "교통"],
@@ -145,9 +146,13 @@
     });
 
     var code = str(b.inviteCode, "").toUpperCase();
+    // 나의 가계부는 혼자 쓰는 것이라 초대가 붙지 않는다
+    var personal = b.kind === "personal";
+    if (personal) code = "";
 
     return {
       id: String(b.id),
+      kind: personal ? "personal" : "trip",
       name: str(b.name, "").trim() || "예산",
       startDate: start,
       endDate: end,
@@ -158,7 +163,7 @@
       members: members,
       // 저장된 플래그를 믿지 않고 실제 상태에서 끌어낸다
       // (초대 코드가 살아 있거나, 나 말고 다른 사람이 있으면 함께 쓰는 예산)
-      shared: memberUids.length > 1 || isInviteCode(code),
+      shared: !personal && (memberUids.length > 1 || isInviteCode(code)),
       inviteCode: isInviteCode(code) ? code : null
     };
   }
@@ -325,6 +330,7 @@
     DEFAULT_CATEGORIES: DEFAULT_CATEGORIES,
     INVITE_LENGTH: INVITE_LENGTH,
     MAX_MEMBERS: MAX_MEMBERS,
+    PERSONAL_NAME: PERSONAL_NAME,
     MIN_PASSWORD: MIN_PASSWORD,
     MAX_NAME: MAX_NAME,
     isEmail: isEmail,

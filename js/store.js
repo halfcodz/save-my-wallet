@@ -415,6 +415,7 @@
     var members = {};
     members[me.uid] = { name: myName() };
     ref.set({
+      kind: b.kind === "personal" ? "personal" : "trip",
       name: b.name,
       startDate: b.startDate,
       endDate: b.endDate,
@@ -429,6 +430,30 @@
     });
     setActiveBudget(ref.id);
     return ref.id;
+  }
+
+  /** 나의 가계부. 달마다 알아서 새 달로 넘어가므로 한 번만 만든다. */
+  function personalBudget() {
+    for (var i = 0; i < data.budgets.length; i++) {
+      if (data.budgets[i].kind === "personal") return data.budgets[i];
+    }
+    return null;
+  }
+
+  function addPersonalBudget(monthlyTotal, todayIso) {
+    var already = personalBudget();
+    if (already) {
+      setActiveBudget(already.id);
+      return already.id;
+    }
+    var month = calc.monthBounds(todayIso);
+    return addBudget({
+      kind: "personal",
+      name: model.PERSONAL_NAME,
+      startDate: month.start,
+      endDate: month.end,
+      totalAmount: monthlyTotal
+    });
   }
 
   function patchBudget(id, patch) {
@@ -482,6 +507,9 @@
   function shareBudget(id) {
     var b = findBudget(id);
     if (!b) return Promise.reject(new Error("예산을 찾을 수 없습니다."));
+    if (b.kind === "personal") {
+      return Promise.reject(new Error("나의 가계부는 혼자 쓰는 가계부라 초대할 수 없습니다."));
+    }
     if (b.ownerUid !== me.uid) return Promise.reject(new Error("예산을 만든 사람만 초대할 수 있습니다."));
 
     var previous = b.inviteCode;
@@ -729,6 +757,7 @@
       var ref = budgetsCol().doc();
       idMap[b.id] = ref.id;
       batch.set(ref, {
+        kind: "trip",
         name: b.name,
         startDate: b.startDate,
         endDate: b.endDate,
@@ -829,6 +858,8 @@
     restoreExpenses: restoreExpenses,
     // 예산
     addBudget: addBudget,
+    addPersonalBudget: addPersonalBudget,
+    personalBudget: personalBudget,
     patchBudget: patchBudget,
     removeBudget: removeBudget,
     setActiveBudget: setActiveBudget,

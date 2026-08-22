@@ -139,10 +139,10 @@
       <div data-show="isHome">
         <div style="padding:12px 20px 22px">
           <!-- 지금 보고 있는 예산. 눌러서 바꾸거나 새로 만든다. -->
-          <button data-act="openSwitcher" style="display:flex;align-items:center;gap:7px;max-width:100%;border:none;background:none;padding:0 0 7px;text-align:left">
-            <span data-el="homeBudgetName" style="min-width:0;font-size:13.5px;font-weight:700;letter-spacing:-.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
-            <span data-show="isSharedHome" data-el="sharedBadge" style="flex:0 0 auto;font-size:10px;font-weight:700;color:var(--g3);border:1px solid var(--g2);border-radius:999px;padding:2px 7px"></span>
-            <span style="flex:0 0 auto;font-size:8px;color:var(--g3)">▼</span>
+          <button data-act="openSwitcher" style="display:flex;align-items:center;gap:8px;max-width:100%;border:1px solid var(--g2);border-radius:999px;background:none;padding:8px 13px 8px 15px;margin-bottom:18px;text-align:left">
+            <span data-el="homeBudgetName" style="min-width:0;font-size:14px;font-weight:700;letter-spacing:-.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+            <span data-show="isSharedHome" data-el="sharedBadge" style="flex:0 0 auto;font-size:11px;font-weight:700;color:var(--g3)"></span>
+            <span style="flex:0 0 auto;font-size:9px;color:var(--g3);line-height:1">▼</span>
           </button>
           <div style="font-size:12px;color:var(--g3);letter-spacing:.04em">남은 금액</div>
           <div data-el="remainingRow" style="display:flex;align-items:baseline;gap:4px;margin-top:2px">
@@ -187,7 +187,6 @@
 
       <!-- ----- 내역 ----- -->
       <div data-show="isHistory" style="padding:10px 0 0">
-        <div data-el="budgetChips" style="display:flex;gap:8px;overflow-x:auto;padding:0 20px 14px"></div>
         <div style="padding:0 20px">
           <div data-show="selMode" style="display:flex;align-items:center;gap:14px;padding:2px 0 12px">
             <div data-el="selCountText" style="flex:1;font-size:14px;font-weight:700">0개 선택됨</div>
@@ -205,12 +204,14 @@
           <div data-show="viewEmpty" style="padding:40px 0;text-align:center;font-size:13px;color:var(--g3)">내역이 없습니다</div>
           <div data-el="groups"></div>
           <div data-show="hasRows" style="font-size:10px;color:var(--g2);text-align:center;padding-bottom:6px">길게 눌러 여러 개 선택</div>
+          <div data-show="hasRows" style="text-align:center;padding:14px 0 20px">
+            <button data-act="deleteAllInHistory" style="border:none;background:none;padding:8px 12px;font-size:12px;color:var(--g3);text-decoration:underline">이 예산 내역 전체 삭제</button>
+          </div>
         </div>
       </div>
 
       <!-- ----- 요약 ----- -->
       <div data-show="isSummary" style="padding:10px 0 0">
-        <div data-el="budgetChipsSummary" style="display:flex;gap:8px;overflow-x:auto;padding:0 20px 14px"></div>
         <div style="padding:0 20px">
           <div style="display:flex;flex-direction:column;align-items:center;padding:6px 0 24px">
             <div data-el="donut" style="position:relative;width:196px;height:196px;border-radius:50%;display:flex;align-items:center;justify-content:center">
@@ -297,7 +298,7 @@
       <div data-el="switcherList"></div>
       <div style="height:1px;background:var(--g2);margin:8px 16px"></div>
       <button data-act="newBudget" style="display:flex;align-items:center;gap:12px;width:100%;text-align:left;border:none;background:none;padding:15px 16px;font-size:15px;font-weight:600">
-        <span style="flex:0 0 auto;width:22px;text-align:center;font-size:17px">＋</span>새 예산 만들기
+        <span style="flex:0 0 auto;width:22px;text-align:center;font-size:17px">＋</span>여행 예산 만들기
       </button>
       <button data-act="joinTrip" style="display:flex;align-items:center;gap:12px;width:100%;text-align:left;border:none;background:none;padding:15px 16px;font-size:15px;font-weight:600;border-top:1px solid var(--g1)">
         <span style="flex:0 0 auto;width:22px;text-align:center;font-size:15px">👥</span>초대 코드로 여행 참여
@@ -308,6 +309,26 @@
     </div>
   </div>
 
+  <!-- ===== 나의 가계부 만들기 ===== -->
+  <div data-show="personalOpen" data-safe-top style="position:absolute;inset:0;background:var(--bg);z-index:90;display:flex;flex-direction:column;animation:mmUp .2s ease-out">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px">
+      <div style="font-size:16px;font-weight:700">나의 가계부</div>
+      <button data-act="closePersonal" style="border:none;background:none;padding:0;font-size:14px;color:var(--g3)">닫기</button>
+    </div>
+    <div style="padding:4px 20px max(20px,env(safe-area-inset-bottom));overflow-y:auto;flex:1">
+      <div style="font-size:13px;color:var(--g3);line-height:1.8">여행 예산과 따로 두는, 평소에 쓰는 가계부입니다.<br />한 달에 쓸 수 있는 돈을 정해 두면 오늘 쓸 수 있는 돈을 알려줍니다.</div>
+      <div style="border:1px solid var(--g2);border-radius:14px;padding:16px;margin-top:18px">
+        <div style="font-size:11px;color:var(--g3);padding-bottom:5px">한 달 예산</div>
+        <div style="display:flex;align-items:baseline;gap:5px;border-bottom:1px solid var(--g2)">
+          <input inputmode="numeric" data-el="pbTotal" placeholder="0" style="flex:1;min-width:0;border:none;padding:6px 0;font-size:30px;font-weight:800;letter-spacing:-.03em;outline:none;text-align:right" />
+          <div style="font-size:15px;color:var(--g3)">원</div>
+        </div>
+        <button data-act="createPersonal" data-el="createPersonal" style="margin-top:16px;width:100%;height:52px;border:none;border-radius:13px;background:var(--fg);color:var(--bg);font-size:16px;font-weight:700">나의 가계부 시작</button>
+      </div>
+      <div data-el="pbHint" style="font-size:11px;color:var(--g3);line-height:1.7;padding-top:14px"></div>
+    </div>
+  </div>
+
   <!-- ===== 메뉴 ===== -->
   <div data-show="menuOpen" data-act="closeMenu" style="position:absolute;inset:0;z-index:85;background:rgba(0,0,0,.28);display:flex;flex-direction:column;justify-content:flex-end">
     <div data-el="menuSheet" style="background:var(--bg);border-top-left-radius:18px;border-top-right-radius:18px;padding:8px 8px max(18px,env(safe-area-inset-bottom));max-height:82%;overflow-y:auto;animation:mmUp .18s ease-out">
@@ -315,8 +336,6 @@
       <button data-act="openShare" style="width:100%;text-align:left;border:none;background:none;padding:16px;font-size:15px;font-weight:600;border-top:1px solid var(--g1)">여행 가계부 함께 쓰기</button>
       <button data-act="openCats" style="width:100%;text-align:left;border:none;background:none;padding:16px;font-size:15px;font-weight:600;border-top:1px solid var(--g1)">카테고리 편집</button>
       <button data-act="toggleTheme" style="width:100%;text-align:left;border:none;background:none;padding:16px;font-size:15px;font-weight:600;border-top:1px solid var(--g1)"><span data-el="themeLabel">다크</span> 모드</button>
-      <button data-act="menuRefresh" style="width:100%;text-align:left;border:none;background:none;padding:16px;font-size:15px;font-weight:600;border-top:1px solid var(--g1)">새로고침</button>
-      <button data-act="deleteAllFromMenu" style="width:100%;text-align:left;border:none;background:none;padding:16px;font-size:15px;font-weight:600;border-top:1px solid var(--g1);color:var(--g3)">내역 전체 삭제</button>
 
       <div style="height:1px;background:var(--g2);margin:8px 16px"></div>
       <div style="display:flex;align-items:center;gap:12px;padding:10px 16px 6px">
@@ -327,7 +346,6 @@
         <button data-act="renameMe" style="border:1px solid var(--g2);border-radius:9px;background:none;padding:8px 12px;font-size:12px;font-weight:600;flex:0 0 auto">이름 변경</button>
       </div>
       <button data-act="signOut" style="width:100%;text-align:left;border:none;background:none;padding:14px 16px;font-size:15px;font-weight:600">로그아웃</button>
-      <button data-act="hardReset" style="width:100%;text-align:left;border:none;background:none;padding:14px 16px;font-size:12.5px;color:var(--g3)">앱 새로 받기 (캐시 비우기)</button>
     </div>
   </div>
 

@@ -55,6 +55,52 @@
     return diffDays(todayIso, endIso) + 1;
   }
 
+  /** 그 날짜가 속한 달의 1일과 말일 */
+  function monthBounds(iso) {
+    var p = String(iso).split("-").map(Number);
+    var lastDay = new Date(Date.UTC(p[0], p[1], 0)).getUTCDate();
+    return {
+      start: p[0] + "-" + pad2(p[1]) + "-01",
+      end: p[0] + "-" + pad2(p[1]) + "-" + pad2(lastDay)
+    };
+  }
+
+  /** "8월" */
+  function monthLabel(iso) {
+    return Number(String(iso).split("-")[1]) + "월";
+  }
+
+  function isPersonal(budget) {
+    return !!budget && budget.kind === "personal";
+  }
+
+  /**
+   * 화면이 실제로 다루는 기간.
+   * 여행 예산은 정해 둔 기간 그대로.
+   * 나의 가계부는 달마다 새로 시작하므로 오늘이 속한 달로 본다.
+   */
+  function effectiveBudget(budget, todayIso) {
+    if (!isPersonal(budget)) return budget;
+    var m = monthBounds(todayIso);
+    var out = {};
+    for (var k in budget) {
+      if (Object.prototype.hasOwnProperty.call(budget, k)) out[k] = budget[k];
+    }
+    out.startDate = m.start;
+    out.endDate = m.end;
+    return out;
+  }
+
+  /** 이 예산에 속한 지출. 나의 가계부는 이번 달 것만 센다. */
+  function budgetExpenses(expenses, budget, todayIso) {
+    var list = expensesOfBudget(expenses, budget.id);
+    if (!isPersonal(budget)) return list;
+    var b = effectiveBudget(budget, todayIso);
+    return list.filter(function (e) {
+      return e.date >= b.startDate && e.date <= b.endDate;
+    });
+  }
+
   /** 'upcoming' | 'active' | 'ended' */
   function budgetStatus(budget, todayIso) {
     if (todayIso > budget.endDate) return "ended";
@@ -123,8 +169,10 @@
    * - perDay: 기간이 끝났으면 null (일일 권장액 숨김)
    */
   function computeBudgetStats(budget, expenses, todayIso) {
-    var list = expensesOfBudget(expenses, budget.id);
-    var total = budget.totalAmount;
+    // 나의 가계부는 이번 달만 본다 (effectiveBudget / budgetExpenses가 걸러 준다)
+    var b = effectiveBudget(budget, todayIso);
+    var list = budgetExpenses(expenses, budget, todayIso);
+    var total = b.totalAmount;
     var spent = sumAmount(list);
     var remaining = total - spent;
     var todaySpent = sumAmount(
@@ -132,8 +180,8 @@
         return e.date === todayIso;
       })
     );
-    var status = budgetStatus(budget, todayIso);
-    var left = daysLeft(todayIso, budget.endDate);
+    var status = budgetStatus(b, todayIso);
+    var left = daysLeft(todayIso, b.endDate);
     var ended = status === "ended";
     var perDay = ended ? null : floorTo100(remaining / left);
 
@@ -394,6 +442,11 @@
     addDays: addDays,
     daysLeft: daysLeft,
     budgetStatus: budgetStatus,
+    monthBounds: monthBounds,
+    monthLabel: monthLabel,
+    isPersonal: isPersonal,
+    effectiveBudget: effectiveBudget,
+    budgetExpenses: budgetExpenses,
     floorTo100: floorTo100,
     clamp: clamp,
     isValidAmount: isValidAmount,

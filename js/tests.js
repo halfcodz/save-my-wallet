@@ -413,6 +413,51 @@
       id: "x2", budgetId: "t1", amount: 100, date: "2026-08-01"
     }).uid === undefined);
 
+    /* ---------- 19.5 나의 가계부: 달마다 이어진다 ---------- */
+    eq("달 경계: 8월", calc.monthBounds("2026-08-22"), { start: "2026-08-01", end: "2026-08-31" });
+    eq("달 경계: 2월(평년)", calc.monthBounds("2026-02-10").end, "2026-02-28");
+    eq("달 경계: 2월(윤년)", calc.monthBounds("2024-02-10").end, "2024-02-29");
+    eq("달 경계: 12월 말일", calc.monthBounds("2026-12-31"), { start: "2026-12-01", end: "2026-12-31" });
+    eq("달 이름", calc.monthLabel("2026-08-22"), "8월");
+    eq("달 이름: 한 자리 달", calc.monthLabel("2026-01-05"), "1월");
+
+    var mine = model.normalizeBudget({
+      id: "p1", kind: "personal", name: "나의 가계부",
+      startDate: "2026-06-01", endDate: "2026-06-30", // 만들었을 때의 달
+      totalAmount: 600000, ownerUid: "u1", memberUids: ["u1"]
+    });
+    eq("나의 가계부: 종류", mine.kind, "personal");
+    ok("나의 가계부: 함께 쓰지 않는다", !mine.shared);
+    ok("나의 가계부: 판별", calc.isPersonal(mine) && !calc.isPersonal(trip));
+
+    var eff = calc.effectiveBudget(mine, "2026-08-22");
+    eq("나의 가계부: 오늘이 속한 달로 본다 (시작)", eff.startDate, "2026-08-01");
+    eq("나의 가계부: 오늘이 속한 달로 본다 (종료)", eff.endDate, "2026-08-31");
+    eq("나의 가계부: 원본은 건드리지 않는다", mine.startDate, "2026-06-01");
+    eq("여행 예산: 기간을 그대로 쓴다", calc.effectiveBudget(trip, "2026-08-22").startDate, trip.startDate);
+
+    var mineExp = [
+      exp("p1", 10000, "2026-08-05"),
+      exp("p1", 20000, "2026-08-22"),
+      exp("p1", 50000, "2026-07-30"), // 지난 달
+      exp("p1", 70000, "2026-09-02")  // 다음 달
+    ];
+    eq("나의 가계부: 이번 달 것만 센다", calc.budgetExpenses(mineExp, mine, "2026-08-22").length, 2);
+    eq("여행 예산: 소속만 보고 거른다", calc.budgetExpenses(mineExp, trip, "2026-08-22").length, 0);
+
+    var ms = calc.computeBudgetStats(mine, mineExp, "2026-08-22");
+    eq("나의 가계부: 이번 달 합계", ms.spent, 30000);
+    eq("나의 가계부: 남은 금액", ms.remaining, 570000);
+    eq("나의 가계부: 이번 달 남은 일수", ms.daysLeft, 10);
+    eq("나의 가계부: 달 안이면 진행 중", ms.status, "active");
+    eq("나의 가계부: 오늘 쓴 돈", ms.todaySpent, 20000);
+
+    var nextMonth = calc.computeBudgetStats(mine, mineExp, "2026-09-02");
+    eq("달이 바뀌면 지출도 새 달 것만", nextMonth.spent, 70000);
+    eq("달이 바뀌어도 예산은 그대로", nextMonth.total, 600000);
+    eq("달이 바뀌어도 끝나지 않는다", nextMonth.status, "active");
+    eq("달이 바뀌면 남은 일수도 새 달 기준", nextMonth.daysLeft, 29);
+
     /* ---------- 20. 자정 넘김 ---------- */
     var beforeMidnight = calc.computeBudgetStats(b, e1, "2026-08-22");
     var afterMidnight = calc.computeBudgetStats(b, e1, "2026-08-23");
