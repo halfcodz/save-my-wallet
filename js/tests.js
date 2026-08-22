@@ -346,6 +346,26 @@
       members: { u1: { name: "지민" }, u2: { name: "예은" }, u3: { name: "하늘" }, u4: { name: "도윤" }, u5: { name: "서아" } }
     }, "u1"), "나 · 예은 · 하늘 외 2명");
     eq("함께: 멤버가 없으면 빈 문자열", calc.memberNames({}, "u1"), "");
+
+    var chips = calc.memberInitials(trip, "u2");
+    eq("동그라미: 나부터", chips.people[0].initial, "나");
+    ok("동그라미: 나 표시", chips.people[0].isMe);
+    eq("동그라미: 나머지는 이름 첫 글자", chips.people[1].initial, "지");
+    eq("동그라미: 인원 수만큼", chips.people.length, 3);
+    eq("동그라미: 접힌 사람 없음", chips.more, 0);
+    ok("동그라미: 나 말고는 isMe 아님", !chips.people[1].isMe);
+
+    var many = calc.memberInitials({
+      memberUids: ["u1", "u2", "u3", "u4", "u5", "u6"],
+      members: { u1: { name: "지민" }, u2: { name: "예은" }, u3: { name: "하늘" },
+                 u4: { name: "도윤" }, u5: { name: "서아" }, u6: { name: "민준" } }
+    }, "u1");
+    eq("동그라미: 기본 4개까지", many.people.length, 4);
+    eq("동그라미: 나머지는 숫자로", many.more, 2);
+
+    eq("동그라미: 멤버 없으면 빈 목록", calc.memberInitials({}, "u1").people.length, 0);
+    eq("동그라미: 이름 없으면 물음표 대신 기본 이름 첫 글자",
+      calc.memberInitials({ memberUids: ["u9"], members: {} }, "u1").people[0].initial, "알");
     eq("함께: 이름 없는 사람도 자리는 있다", calc.memberNames({ memberUids: ["u1", "u9"], members: { u1: { name: "지민" } } }, "u1"), "나 · 알 수 없음");
 
     var tripExp = [

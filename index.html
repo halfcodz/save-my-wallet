@@ -182,10 +182,11 @@
             <div data-el="daysLeftText" style="flex:1;font-size:0.6875rem;color:var(--g3);text-align:right"></div>
           </div>
 
-          <!-- 누구와 함께 쓰는지. 누르면 멤버 관리로 간다. -->
-          <button data-show="isSharedHome" data-act="openShare" style="display:flex;align-items:center;gap:0.4375rem;max-width:100%;border:none;background:none;padding:0.875rem 0 0;text-align:left">
-            <span style="flex:0 0 auto;font-size:0.6875rem;line-height:1">👥</span>
-            <span data-el="memberLine" style="min-width:0;font-size:0.71875rem;color:var(--g3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+          <!-- 누구와 함께 쓰는지. 이름 첫 글자만 동그라미로. 누르면 멤버 관리로 간다. -->
+          <button data-show="isSharedHome" data-el="memberButton" data-act="openShare" style="display:flex;align-items:center;gap:0.75rem;width:100%;border:none;background:none;padding:0.875rem 0 0;text-align:left">
+            <span style="flex:1;min-width:0;font-size:0.6875rem;color:var(--g3)">함께 쓰는 사람</span>
+            <span data-el="memberAvatars" style="flex:0 0 auto;display:flex;align-items:center"></span>
+            <span style="flex:0 0 auto;font-size:0.625rem;color:var(--g3);line-height:1">›</span>
           </button>
         </div>
 

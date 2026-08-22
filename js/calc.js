@@ -386,6 +386,33 @@
   }
 
   /**
+   * 함께 쓰는 사람을 동그라미 하나씩으로 보여주기 위한 목록.
+   * 이름의 첫 글자만 쓴다 — 한글은 첫 글자만으로도 대체로 구분된다.
+   * 넘치면 뒤를 접고 몇 명이 더 있는지만 알려 준다.
+   */
+  function memberInitials(budget, myUid, max) {
+    var uids = budget && Array.isArray(budget.memberUids) ? budget.memberUids : [];
+    if (!uids.length) return { people: [], more: 0 };
+
+    var limit = max || 4;
+    var ordered = [];
+    if (uids.indexOf(myUid) >= 0) ordered.push(myUid);
+    for (var i = 0; i < uids.length; i++) {
+      if (uids[i] !== myUid) ordered.push(uids[i]);
+    }
+
+    var people = ordered.slice(0, limit).map(function (u) {
+      var mine = u === myUid;
+      var name = mine ? "나" : memberName(budget, u, "");
+      // 이모지가 섞인 이름도 한 글자로 잘리게 (surrogate pair 대비)
+      var chars = typeof Array.from === "function" ? Array.from(name) : String(name).split("");
+      return { uid: u, initial: chars.length ? chars[0] : "?", isMe: mine };
+    });
+
+    return { people: people, more: Math.max(0, ordered.length - people.length) };
+  }
+
+  /**
    * 사람별 지출 합계 (많이 쓴 순).
    * 아직 한 푼도 안 쓴 멤버도 0원으로 자기 줄을 갖는다 — 정산에 필요하다.
    */
@@ -538,6 +565,7 @@
     UNKNOWN_MEMBER: UNKNOWN_MEMBER,
     memberName: memberName,
     memberNames: memberNames,
+    memberInitials: memberInitials,
     memberShares: memberShares,
     settlement: settlement,
     periodLabel: periodLabel,

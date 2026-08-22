@@ -660,9 +660,18 @@ async function wait(ms) {
 
   eq("상대가 쓴 돈까지 합산된다", txt("remainingText"), "280,000");
   ok("함께 쓰는 예산 표시가 뜬다", visible("isSharedHome"));
-  eq("누구와 함께 쓰는지 이름이 보인다", txt("memberLine"), "나 · 예은과 함께 쓰는 중");
-  ok("이름 줄을 누르면 멤버 관리로 갈 수 있다",
-    doc.querySelector('[data-show="isSharedHome"][data-act="openShare"]') !== null);
+  const avatars = el("memberAvatars");
+  eq("함께 쓰는 사람이 동그라미 두 개로", avatars.children.length, 2);
+  eq("첫 번째는 나", avatars.children[0].textContent, "나");
+  eq("두 번째는 상대 이름 첫 글자", avatars.children[1].textContent, "예");
+  ok("내 동그라미만 반전", avatars.children[0].getAttribute("style").includes("background:var(--fg)"));
+  ok("상대 동그라미는 회색", avatars.children[1].getAttribute("style").includes("background:var(--g1)"));
+  ok("겹쳐 놓되 배경색 링으로 떨어뜨린다",
+    avatars.children[1].getAttribute("style").includes("margin-left:-0.375rem") &&
+    avatars.children[1].getAttribute("style").includes("box-shadow:0 0 0 2px var(--bg)"));
+  ok("이모지는 쓰지 않는다", !avatars.textContent.includes("👥"));
+  eq("전체 이름은 설명으로 남긴다", el("memberButton").getAttribute("title"), "나 · 예은");
+  ok("눌러서 멤버 관리로 갈 수 있다", el("memberButton").getAttribute("data-act") === "openShare");
   ok("오늘 내역에 상대 이름이 보인다", el("todayList").textContent.includes("예은"));
 
   /* --- 8. 요약: 사람별 + 정산 --- */

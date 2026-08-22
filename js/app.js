@@ -921,7 +921,7 @@
 
     text("homeBudgetName", active.name);
     show("isSharedHome", !!active.shared);
-    text("memberLine", calc.memberNames(active, me().uid) + "과 함께 쓰는 중");
+    renderMemberAvatars(active);
 
     show("hasLimit", s.hasLimit);
     show("noLimit", !s.hasLimit);
@@ -978,6 +978,38 @@
     fit(el("remainingText"), el("remainingWon"), 56, 4);
     fit(el("perDayText"), el("perDayWon"), 24, 3);
     fit(el("todaySpentText"), el("todaySpentWon"), 24, 3);
+  }
+
+  /**
+   * 함께 쓰는 사람 — 이름 첫 글자를 담은 동그라미를 겹쳐 놓는다.
+   * 글자는 회색 설명 하나로 줄이고, 누구인지는 동그라미가 말하게 한다.
+   * 첫 글자만으로는 알기 어려울 수 있어 전체 이름은 버튼 설명에 남긴다.
+   */
+  function renderMemberAvatars(budget) {
+    var stack = calc.memberInitials(budget, me().uid);
+    var btn = el("memberButton");
+    if (btn) {
+      var full = calc.memberNames(budget, me().uid, 20);
+      btn.setAttribute("aria-label", "함께 쓰는 사람 " + full + ". 눌러서 관리");
+      btn.setAttribute("title", full);
+    }
+
+    var chips = stack.people.map(function (p, i) {
+      return avatarHTML(p.initial, i > 0, p.isMe);
+    });
+    if (stack.more > 0) chips.push(avatarHTML("+" + stack.more, true, false));
+    html(el("memberAvatars"), chips.join(""));
+  }
+
+  function avatarHTML(label, overlap, mine) {
+    return (
+      '<span style="width:1.375rem;height:1.375rem;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:0.625rem;font-weight:700;letter-spacing:-.02em;' +
+        // 겹쳐 놓되 배경색 링을 둘러 서로 떨어져 보이게 한다
+        "box-shadow:0 0 0 2px var(--bg);" +
+        (overlap ? "margin-left:-0.375rem;" : "") +
+        (mine ? "background:var(--fg);color:var(--bg);" : "background:var(--g1);color:var(--g3);") +
+      '">' + esc(label) + "</span>"
+    );
   }
 
   function renderAdd(active) {
