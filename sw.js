@@ -9,7 +9,7 @@
    배포할 때 VERSION만 올리면 된다. 새 워커가 설치되면 앱이 알려주고,
    당겨서 새로고침하면 바로 갈아탄다. */
 
-var VERSION = "v12";
+var VERSION = "v13";
 var CACHE = "moneyplan-" + VERSION;
 var NET_TIMEOUT = 4000; // 이 시간 안에 응답이 없으면 캐시부터 보여준다
 
