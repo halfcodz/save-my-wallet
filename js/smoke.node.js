@@ -241,6 +241,11 @@ async function tick(n = 6) {
   for (let i = 0; i < n; i++) await new Promise((r) => setTimeout(r, 0));
 }
 
+/* 실제 시간이 흘러야 하는 것(포커스 이동 등)을 기다린다 */
+async function wait(ms) {
+  await new Promise((r) => setTimeout(r, ms));
+}
+
 (async function main() {
   const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
   const dom = new JSDOM(html, {
@@ -456,6 +461,76 @@ async function tick(n = 6) {
   click('[data-act="save"]');
   await tick(10);
   eq("다시 넣은 금액", txt("remainingText"), "370,000");
+
+  /* --- 5.5 예산 고르기 시트 --- */
+  eq("메인에 지금 예산 이름이 보인다", txt("homeBudgetName"), "부산 여행");
+
+  click('[data-act="openSwitcher"]');
+  await tick(4);
+  ok("메인 제목을 누르면 예산 고르기가 열린다", visible("switcherOpen"));
+  ok("지금 예산에 체크가 있다", el("switcherList").textContent.includes("✓"));
+  ok("예산 이름이 나온다", el("switcherList").textContent.includes("부산 여행"));
+  ok("기간과 쓴 금액도 같이 보인다", el("switcherList").textContent.includes("8/20"));
+
+  // 여기서 곧장 새 예산으로 갈 수 있다
+  click('[data-el="switcherSheet"] [data-act="newBudget"]');
+  await tick(4);
+  ok("새 예산 만들기로 바로 넘어간다", visible("budgetOpen"));
+  ok("예산 고르기는 닫힌다", !visible("switcherOpen"));
+  click('[data-act="closeBudget"]');
+  await tick(3);
+
+  // 여행 참여로도 갈 수 있다
+  click('[data-act="openSwitcher"]');
+  await tick(3);
+  click('[data-el="switcherSheet"] [data-act="joinTrip"]');
+  await tick(6);
+  ok("초대 코드 참여로 바로 넘어간다", visible("shareOpen"));
+  ok("예산 고르기는 닫힌다", !visible("switcherOpen"));
+  await wait(150); // 시트가 올라온 뒤 커서가 옮겨간다
+  eq(
+    "코드 칸에 커서가 가 있다",
+    doc.activeElement && doc.activeElement.getAttribute("data-el"),
+    "joinCode"
+  );
+  click('[data-act="closeShare"]');
+  await tick(3);
+
+  // 두 번째 예산을 만들어 전환을 확인한다
+  click('[data-act="newBudget"]');
+  await tick(4);
+  type("nbName", "생활비");
+  type("nbStart", "2026-08-01");
+  type("nbEnd", "2026-08-31");
+  type("nbTotal", "500000");
+  await tick(2);
+  click('[data-act="createBudget"]');
+  await tick(10);
+  eq("새 예산으로 바뀐다", txt("homeBudgetName"), "생활비");
+
+  click('[data-act="openSwitcher"]');
+  await tick(4);
+  const rows = doc.querySelectorAll('[data-el="switcherList"] [data-act="pickBudget"]');
+  eq("예산 두 개가 목록에 나온다", rows.length, 2);
+  const busanRow = [...rows].find((r) => r.textContent.includes("부산 여행"));
+  click(busanRow);
+  await tick(10);
+  eq("한 번 눌러 예산이 바뀐다", txt("homeBudgetName"), "부산 여행");
+  ok("고르면 시트가 닫힌다", !visible("switcherOpen"));
+  eq("바뀐 예산의 금액이 보인다", txt("remainingText"), "370,000");
+
+  // 내역 탭 칩줄 끝의 ＋ 로도 열린다
+  click('[data-act="goHistory"]');
+  await tick(5);
+  const plus = doc.querySelector('[data-el="budgetChips"] [data-act="openSwitcher"]');
+  ok("칩 줄 끝에 ＋ 가 있다", !!plus && plus.textContent === "＋");
+  click(plus);
+  await tick(4);
+  ok("＋ 로도 예산 고르기가 열린다", visible("switcherOpen"));
+  click('[data-act="closeSwitcher"]');
+  await tick(3);
+  click('[data-act="goHome"]');
+  await tick(4);
 
   /* --- 6. 초대 코드 --- */
   click('[data-act="openShare"]');

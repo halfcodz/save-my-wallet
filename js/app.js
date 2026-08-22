@@ -27,6 +27,7 @@
     catsOpen: false,
     shareOpen: false,
     menuOpen: false,
+    switcherOpen: false,
     snack: null,
     snackTimer: null,
     updateReady: false,
@@ -287,6 +288,7 @@
     show("budgetOpen", ui.budgetOpen);
     show("catsOpen", ui.catsOpen);
     show("shareOpen", ui.shareOpen);
+    show("switcherOpen", ui.switcherOpen);
     show("snackOpen", !!ui.snack);
     show("snackUndo", !!(ui.snack && ui.snack.undo));
     show("editing", !!ui.draft.editingId);
@@ -317,6 +319,38 @@
     renderBudgetList();
     renderCats();
     renderShare();
+    renderSwitcher();
+  }
+
+  /** 예산 고르기 시트 — 바꾸기 / 새로 만들기 / 초대 코드로 참여를 한자리에 */
+  function renderSwitcher() {
+    if (!ui.switcherOpen) return;
+    var activeId = data.settings.activeBudgetId;
+
+    html(
+      el("switcherList"),
+      data.budgets
+        .map(function (b) {
+          var on = b.id === activeId;
+          var st = calc.computeBudgetStats(b, data.expenses, today);
+          return (
+            '<button data-act="pickBudget" data-id="' + esc(b.id) +
+              '" style="display:flex;align-items:center;gap:12px;width:100%;text-align:left;border:none;background:none;padding:11px 16px">' +
+              '<span style="flex:0 0 auto;width:22px;text-align:center;font-size:13px;font-weight:800">' +
+                (on ? "✓" : "") + "</span>" +
+              '<span style="flex:1;min-width:0">' +
+                '<span style="display:block;font-size:15px;font-weight:' + (on ? "700" : "600") +
+                  ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
+                  esc((b.shared ? "👥 " : "") + b.name) + "</span>" +
+                '<span style="display:block;font-size:11px;color:var(--g3);margin-top:3px">' +
+                  esc(calc.periodLabel(b) + " · " + calc.formatWon(st.spent) + " / " +
+                      calc.formatWon(b.totalAmount) + "원") + "</span>" +
+              "</span>" +
+            "</button>"
+          );
+        })
+        .join("")
+    );
   }
 
   /* ----- 로그인 전 화면 ----- */
@@ -432,14 +466,19 @@
   }
 
   function chipsHTML(selectedId) {
-    return data.budgets
-      .map(function (b) {
-        return (
-          '<button data-act="selectView" data-id="' + esc(b.id) + '" style="' + chipStyle(b.id === selectedId) + '">' +
-          esc((b.shared ? "👥 " : "") + b.name + " " + calc.periodLabel(b)) + "</button>"
-        );
-      })
-      .join("");
+    return (
+      data.budgets
+        .map(function (b) {
+          return (
+            '<button data-act="selectView" data-id="' + esc(b.id) + '" style="' + chipStyle(b.id === selectedId) + '">' +
+            esc((b.shared ? "👥 " : "") + b.name + " " + calc.periodLabel(b)) + "</button>"
+          );
+        })
+        .join("") +
+      // 칩 줄 끝의 ＋ — 여기서도 새 예산과 여행 참여로 갈 수 있다
+      '<button data-act="openSwitcher" aria-label="예산 추가" style="' + chipStyle(false) +
+        ';flex:0 0 auto;padding:7px 14px;font-size:14px;line-height:1">＋</button>'
+    );
   }
 
   function renderView() {
@@ -636,6 +675,7 @@
   function renderHome(active) {
     var s = calc.computeBudgetStats(active, data.expenses, today);
 
+    text("homeBudgetName", active.name);
     show("isSharedHome", !!active.shared);
     text("sharedBadge", "👥 " + active.memberUids.length + "명");
 
@@ -1199,6 +1239,7 @@
 
     /* --- 메뉴 --- */
     openMenu: function () {
+      closeSheets();
       ui.menuOpen = true;
       render();
     },
@@ -1207,10 +1248,48 @@
       render();
     },
     openBudget: function () {
-      ui.menuOpen = false;
+      closeSheets();
       ui.budgetOpen = true;
       ui.nb = { name: "", start: today, end: calc.addDays(today, 6), total: "" };
       render();
+    },
+
+    /* --- 예산 고르기 --- */
+    openSwitcher: function () {
+      closeSheets();
+      ui.switcherOpen = true;
+      render();
+    },
+    closeSwitcher: function () {
+      ui.switcherOpen = false;
+      render();
+    },
+    pickBudget: function (node) {
+      var id = node.getAttribute("data-id");
+      store.setActiveBudget(id);
+      ui.viewId = id;
+      ui.switcherOpen = false;
+      ui.selMode = false;
+      ui.selected = [];
+      ui.swipedId = null;
+      render();
+    },
+    /** 어느 화면에서 눌러도 곧장 새 예산 입력으로 */
+    newBudget: function () {
+      closeSheets();
+      ui.budgetOpen = true;
+      ui.nb = { name: "", start: today, end: calc.addDays(today, 6), total: "" };
+      render();
+      var node = el("nbName");
+      if (node) node.focus();
+    },
+    /** 어느 화면에서 눌러도 곧장 초대 코드 입력으로 */
+    joinTrip: function () {
+      closeSheets();
+      ui.shareOpen = true;
+      ui.share = { code: "", error: "", busy: false };
+      render();
+      focusJoinCode();
     },
     closeBudget: function () {
       ui.budgetOpen = false;
@@ -1319,7 +1398,7 @@
 
     /* --- 함께 쓰기 --- */
     openShare: function () {
-      ui.menuOpen = false;
+      closeSheets();
       ui.shareOpen = true;
       ui.share = { code: "", error: "", busy: false };
       render();
@@ -1434,7 +1513,7 @@
     },
 
     /* --- 카테고리 --- */
-    openCats: function () { ui.menuOpen = false; ui.catsOpen = true; render(); },
+    openCats: function () { closeSheets(); ui.catsOpen = true; render(); },
     closeCats: function () { flushCategoryPatches(); ui.catsOpen = false; render(); },
     addCat: function () {
       flushCategoryPatches();
@@ -1474,6 +1553,34 @@
       render();
     }
   };
+
+  /** 시트끼리 겹쳐 열리지 않게 한 번에 정리한다 */
+  function closeSheets() {
+    ui.menuOpen = false;
+    ui.switcherOpen = false;
+    ui.budgetOpen = false;
+    ui.shareOpen = false;
+    ui.catsOpen = false;
+  }
+
+  /**
+   * 초대 코드 칸으로 바로 데려간다. 참여를 누른 사람은 코드를 칠 준비가 된 상태다.
+   * 시트가 올라오는 동안은 아직 화면에 자리를 잡기 전이라 한 박자 뒤에 옮긴다.
+   */
+  function focusJoinCode() {
+    setTimeout(function () {
+      var node = el("joinCode");
+      if (!node) return;
+      try {
+        if (typeof node.scrollIntoView === "function") node.scrollIntoView({ block: "center" });
+      } catch (e) {
+        /* 옵션을 모르는 브라우저면 그냥 넘어간다 */
+      }
+      try {
+        node.focus();
+      } catch (e) {}
+    }, 80);
+  }
 
   function leaveBudget(id) {
     var b = findBudget(id);
@@ -1737,7 +1844,8 @@
       uiTheme = data.settings.theme;
       ui.tab = "home";
       ui.viewId = null;
-      ui.addOpen = ui.budgetOpen = ui.catsOpen = ui.shareOpen = ui.menuOpen = false;
+      ui.addOpen = false;
+      closeSheets();
       ui.selMode = false;
       ui.selected = [];
       legacyAsked = false;
@@ -1826,6 +1934,7 @@
     },
     canPull: function () {
       if (ui.addOpen || ui.menuOpen || ui.budgetOpen || ui.catsOpen || ui.shareOpen) return false;
+      if (ui.switcherOpen) return false;
       if (ui.selMode || ui.swipedId) return false;
       var s = auth.state().status;
       return s === "signed-in" || s === "signed-out";
