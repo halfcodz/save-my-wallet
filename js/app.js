@@ -194,6 +194,15 @@
     );
   }
 
+  /** 네모 체크 상자 (로그인 유지) */
+  function keepBoxStyle(on) {
+    return (
+      "flex:0 0 auto;width:20px;height:20px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;border:1px solid " +
+      (on ? "var(--fg)" : "var(--g2)") +
+      ";background:" + (on ? "var(--fg)" : "transparent") + ";color:var(--bg)"
+    );
+  }
+
   function catButtonStyle(selected) {
     return (
       "display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;height:clamp(42px,6.4dvh,60px);border-radius:12px;padding:2px;border:1px solid " +
@@ -394,6 +403,16 @@
 
     var pw = el("authPassword");
     if (pw) pw.setAttribute("autocomplete", isSignup ? "new-password" : "current-password");
+
+    var keep = auth.keepSignedIn();
+    css("keepBox", keepBoxStyle(keep));
+    text("keepBox", keep ? "✓" : "");
+    text(
+      "keepHint",
+      keep
+        ? "이 기기에서는 다음에 열 때도 로그인된 상태입니다. 인터넷이 없어도 바로 들어갑니다."
+        : "앱을 완전히 닫으면 로그아웃됩니다. 남의 기기나 공용 기기에서 쓸 때 꺼 두세요."
+    );
 
     // 버튼은 늘 눌린다. 형식이 틀렸으면 눌렀을 때 어디가 틀렸는지 알려 준다.
     // (눌리지 않는 버튼은 왜 안 되는지를 말해 주지 못한다)
@@ -1096,6 +1115,11 @@
           render();
         }
       );
+    },
+    toggleKeepSignedIn: function () {
+      var next = !auth.keepSignedIn();
+      auth.setKeepSignedIn(next);
+      render();
     },
     authReset: function () {
       var a = ui.auth;

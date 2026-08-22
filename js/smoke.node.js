@@ -171,11 +171,18 @@ function makeFake() {
   let authCb = null;
   const users = new Map();
 
+  let persistence = null; // 마지막으로 요청된 로그인 유지 방식
   const auth = {
     get currentUser() {
       return current;
     },
-    setPersistence: () => Promise.resolve(),
+    get lastPersistence() {
+      return persistence;
+    },
+    setPersistence: (mode) => {
+      persistence = mode;
+      return Promise.resolve();
+    },
     onAuthStateChanged: (next) => {
       authCb = next;
       Promise.resolve().then(() => next(current));
@@ -219,7 +226,9 @@ function makeFake() {
       return { cfg };
     },
     app: () => firebase.apps[0],
-    auth: Object.assign(() => auth, { Auth: { Persistence: { LOCAL: "local" } } }),
+    auth: Object.assign(() => auth, {
+      Auth: { Persistence: { LOCAL: "local", SESSION: "session", NONE: "none" } }
+    }),
     firestore: Object.assign(() => db, { FieldValue })
   };
 
@@ -351,9 +360,26 @@ async function tick(n = 6) {
   await tick(3);
   ok("길이를 채우면 지적이 사라진다", !visible("authError"), errorText());
 
+  /* --- 2.5 로그인 유지 --- */
+  eq("로그인 유지는 기본으로 켜져 있다", txt("keepBox"), "✓");
+  ok("켜져 있으면 그 뜻을 설명한다", txt("keepHint").includes("로그인된 상태"), txt("keepHint"));
+
+  click('[data-act="toggleKeepSignedIn"]');
+  await tick(3);
+  eq("누르면 꺼진다", txt("keepBox"), "");
+  ok("꺼졌을 때의 뜻도 설명한다", txt("keepHint").includes("로그아웃"), txt("keepHint"));
+  eq("설정이 기기에 남는다", win.localStorage.getItem("moneyplan.keepSignedIn"), "0");
+  eq("끄면 세션 유지로 바뀐다", fake.authApi.lastPersistence, "session");
+
+  click('[data-act="toggleKeepSignedIn"]');
+  await tick(3);
+  eq("다시 누르면 켜진다", txt("keepBox"), "✓");
+  eq("켜면 기기 유지로 돌아온다", fake.authApi.lastPersistence, "local");
+
   /* --- 3. 회원가입 --- */
   click('[data-act="authSubmit"]');
   await tick(12);
+  eq("가입할 때도 유지 설정이 적용된다", fake.authApi.lastPersistence, "local");
 
   ok("가입 후 로그인 화면이 사라진다", !visible("authForm"));
   ok("예산이 없으니 시작 화면이 뜬다", visible("noBudget"), "authLoading=" + visible("authLoading"));

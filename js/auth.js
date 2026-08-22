@@ -21,6 +21,9 @@
   var app = null;
   var auth = null;
 
+  /* 로그인 유지 여부. 기본은 유지(켜짐) — 개인 기기에서 쓰는 앱이므로. */
+  var KEEP_KEY = "moneyplan.keepSignedIn";
+
   function emit() {
     for (var i = 0; i < listeners.length; i++) listeners[i](state);
   }
@@ -50,6 +53,46 @@
       if (typeof v !== "string" || !v || v.indexOf("PASTE_YOUR") === 0) return false;
     }
     return true;
+  }
+
+  /* ---------- 로그인 유지 ---------- */
+
+  function keepSignedIn() {
+    try {
+      // 값이 없으면 유지가 기본
+      return localStorage.getItem(KEEP_KEY) !== "0";
+    } catch (e) {
+      return true; // 사파리 프라이빗 모드 등
+    }
+  }
+
+  /**
+   * 유지: LOCAL   — 앱을 닫았다 열어도 로그인된 채로. 오프라인에서도 바로 들어간다.
+   * 끔  : SESSION — 앱을 완전히 닫으면 로그아웃. 공용 기기용.
+   * Firebase는 로그인 "전에" 정해 둬야 해서, 로그인할 때마다 다시 적용한다.
+   */
+  function applyPersistence() {
+    if (!auth || typeof firebase === "undefined" || !firebase.auth || !firebase.auth.Auth) {
+      return Promise.resolve();
+    }
+    var P = firebase.auth.Auth.Persistence;
+    var mode = keepSignedIn() ? P.LOCAL : P.SESSION;
+    try {
+      return auth.setPersistence(mode).catch(function () {
+        /* 저장이 막힌 브라우저면 이번 세션에만 유지된다 */
+      });
+    } catch (e) {
+      return Promise.resolve();
+    }
+  }
+
+  function setKeepSignedIn(on) {
+    try {
+      localStorage.setItem(KEEP_KEY, on ? "1" : "0");
+    } catch (e) {
+      /* 못 남겨도 이번 로그인에는 적용된다 */
+    }
+    return applyPersistence();
   }
 
   /* ---------- 사용자 표시 이름 ---------- */
@@ -91,12 +134,8 @@
       return;
     }
 
-    // 로그인 상태를 기기에 남긴다 -> 다음에 열 때, 그리고 오프라인에서도 바로 들어간다
-    var persisted = auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function () {
-      /* 사파리 프라이빗 모드 등에서 저장이 막히면 이번 세션에만 로그인 상태를 유지한다 */
-    });
-
-    persisted.then(function () {
+    // "로그인 유지" 설정을 적용하고 나서 상태를 듣기 시작한다
+    applyPersistence().then(function () {
       auth.onAuthStateChanged(
         function (user) {
           state.user = toPublic(user);
@@ -114,8 +153,10 @@
   function signUp(email, password, name) {
     if (!auth) return Promise.reject(new Error("준비되지 않았습니다."));
     var clean = (name || "").trim().slice(0, 20);
-    return auth
-      .createUserWithEmailAndPassword((email || "").trim(), password || "")
+    return applyPersistence()
+      .then(function () {
+        return auth.createUserWithEmailAndPassword((email || "").trim(), password || "");
+      })
       .then(function (cred) {
         if (!clean || !cred.user) return cred;
         // 이름은 실패해도 가입 자체는 살린다 (다음 로그인 때 이메일 아이디로 대체됨)
@@ -134,7 +175,9 @@
 
   function signIn(email, password) {
     if (!auth) return Promise.reject(new Error("준비되지 않았습니다."));
-    return auth.signInWithEmailAndPassword((email || "").trim(), password || "");
+    return applyPersistence().then(function () {
+      return auth.signInWithEmailAndPassword((email || "").trim(), password || "");
+    });
   }
 
   function signOut() {
@@ -201,6 +244,8 @@
     user: function () {
       return state.user;
     },
+    keepSignedIn: keepSignedIn,
+    setKeepSignedIn: setKeepSignedIn,
     signUp: signUp,
     signIn: signIn,
     signOut: signOut,

@@ -91,6 +91,12 @@
       <input data-el="authPassword" type="password" autocomplete="current-password" style="width:100%;border:none;border-bottom:1px solid var(--g2);padding:9px 0;font-size:15px;outline:none" />
     </div>
 
+    <button data-act="toggleKeepSignedIn" style="display:flex;align-items:center;gap:10px;width:100%;margin-top:20px;border:none;background:none;padding:6px 0;text-align:left">
+      <span data-el="keepBox"></span>
+      <span style="font-size:13.5px;font-weight:600">로그인 유지</span>
+    </button>
+    <div data-el="keepHint" style="font-size:11px;color:var(--g3);line-height:1.6;margin-top:6px;padding-left:30px"></div>
+
     <div data-show="authError" style="margin-top:16px;border-radius:11px;background:var(--g1);padding:12px 14px;font-size:12.5px;line-height:1.6">
       <span data-el="authErrorText"></span>
     </div>
