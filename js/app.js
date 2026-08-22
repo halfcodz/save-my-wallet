@@ -322,6 +322,60 @@
     );
   }
 
+  /**
+   * 칸 하나가 형식에 맞는지. 맞으면 빈 문자열, 아니면 무엇이 틀렸는지.
+   * 입력창에 힌트를 두지 않으므로, 틀렸을 때 여기서 구체적으로 알려 준다.
+   */
+  function authFieldProblem(field) {
+    var a = ui.auth;
+
+    if (field === "authName") {
+      if (a.mode !== "signup") return "";
+      if (!a.name.trim()) return "이름을 입력해 주세요. 함께 쓸 때 이 이름이 보입니다.";
+      return "";
+    }
+
+    if (field === "authEmail") {
+      if (!a.email) return "이메일을 입력해 주세요.";
+      if (!model.isEmail(a.email)) {
+        return "이메일 형식이 올바르지 않습니다. name@example.com 처럼 적어 주세요.";
+      }
+      return "";
+    }
+
+    if (field === "authPassword") {
+      if (!a.password) return "비밀번호를 입력해 주세요.";
+      if (a.password.length < model.MIN_PASSWORD) {
+        return "비밀번호는 " + model.MIN_PASSWORD + "자 이상이어야 합니다. 지금 " +
+          a.password.length + "자입니다.";
+      }
+      return "";
+    }
+
+    return "";
+  }
+
+  /** 칸을 비운 채 지나가는 것까지 잡지는 않는다 (아직 안 쓴 것뿐이므로) */
+  function authBlurProblem(field) {
+    var a = ui.auth;
+    if (field === "authEmail" && !a.email) return "";
+    if (field === "authPassword" && !a.password) return "";
+    if (field === "authName" && !a.name.trim()) return "";
+    return authFieldProblem(field);
+  }
+
+  /** 보내기 직전 전체 검사. 처음 걸린 것을 돌려준다. */
+  function authProblem() {
+    var order = ui.auth.mode === "signup"
+      ? ["authName", "authEmail", "authPassword"]
+      : ["authEmail", "authPassword"];
+    for (var i = 0; i < order.length; i++) {
+      var message = authFieldProblem(order[i]);
+      if (message) return { field: order[i], message: message };
+    }
+    return null;
+  }
+
   function renderAuth() {
     var a = ui.auth;
     var isSignup = a.mode === "signup";
@@ -329,7 +383,7 @@
     show("isSignup", isSignup);
     show("authError", !!a.error);
     text("authErrorText", a.error);
-    text("authTitle", isSignup ? "가계부를 시작합니다" : "다시 오셨네요");
+    text("authTitle", isSignup ? "가계부를 시작합니다" : "환영합니다");
 
     css("tabLogin", authTabStyle(!isSignup));
     css("tabSignup", authTabStyle(isSignup));
@@ -341,14 +395,14 @@
     var pw = el("authPassword");
     if (pw) pw.setAttribute("autocomplete", isSignup ? "new-password" : "current-password");
 
-    var canSubmit =
-      !a.busy && a.email.indexOf("@") > 0 && a.password.length >= 6 && (!isSignup || !!a.name.trim());
+    // 버튼은 늘 눌린다. 형식이 틀렸으면 눌렀을 때 어디가 틀렸는지 알려 준다.
+    // (눌리지 않는 버튼은 왜 안 되는지를 말해 주지 못한다)
     var label = a.busy ? "잠시만요…" : isSignup ? "가입하고 시작" : "로그인";
     var btn = el("authSubmit");
     if (btn) {
-      btn.disabled = !canSubmit;
+      btn.disabled = a.busy;
       btn.textContent = label;
-      btn.style.cssText = bigButtonStyle(canSubmit, "margin-top:22px;");
+      btn.style.cssText = bigButtonStyle(!a.busy, "margin-top:22px;");
     }
   }
 
@@ -1011,19 +1065,14 @@
     authSubmit: function () {
       var a = ui.auth;
       if (a.busy) return;
-      if (a.email.indexOf("@") <= 0) {
-        a.error = "이메일을 확인해 주세요.";
+
+      var problem = authProblem();
+      if (problem) {
+        a.error = problem.message;
         render();
-        return;
-      }
-      if (a.password.length < 6) {
-        a.error = "비밀번호는 6자 이상이어야 합니다.";
-        render();
-        return;
-      }
-      if (a.mode === "signup" && !a.name.trim()) {
-        a.error = "이름을 입력해 주세요. 함께 쓸 때 이 이름이 보입니다.";
-        render();
+        // 틀린 칸으로 커서를 옮겨 준다 — 어디를 고쳐야 하는지 바로 보이게
+        var node = el(problem.field);
+        if (node) node.focus();
         return;
       }
 
@@ -1050,9 +1099,13 @@
     },
     authReset: function () {
       var a = ui.auth;
-      if (a.email.indexOf("@") <= 0) {
-        a.error = "먼저 이메일을 입력해 주세요. 그 주소로 재설정 링크를 보냅니다.";
+      if (!model.isEmail(a.email)) {
+        a.error = a.email
+          ? "이메일 형식이 올바르지 않습니다. 재설정 링크를 보낼 주소를 정확히 적어 주세요."
+          : "먼저 이메일을 입력해 주세요. 그 주소로 재설정 링크를 보냅니다.";
         render();
+        var node = el("authEmail");
+        if (node) node.focus();
         return;
       }
       auth.resetPassword(a.email).then(
@@ -1447,10 +1500,10 @@
       node.value = ui.nb.total;
       renderBudgetSheet();
     }
-    // 인증 입력은 다시 그리지 않는다 (포커스와 커서 위치 유지)
-    else if (name === "authEmail") { ui.auth.email = node.value.trim(); renderAuthButtonOnly(); }
-    else if (name === "authPassword") { ui.auth.password = node.value; renderAuthButtonOnly(); }
-    else if (name === "authName") { ui.auth.name = node.value; renderAuthButtonOnly(); }
+    // 고치는 중에는 지적을 거둔다 (타이핑하는 내내 빨간 소리를 듣지 않게)
+    else if (name === "authEmail") { ui.auth.email = node.value.trim(); clearAuthError(); }
+    else if (name === "authPassword") { ui.auth.password = node.value; clearAuthError(); }
+    else if (name === "authName") { ui.auth.name = node.value; clearAuthError(); }
     else if (name === "joinCode") {
       ui.share.code = model.normalizeInviteCode(node.value);
       node.value = ui.share.code;
@@ -1460,16 +1513,12 @@
     if (name === "draftMemo" || name === "draftDate") renderAdd(activeBudget());
   });
 
-  /** 인증 화면에서 버튼 활성/비활성만 갱신 (입력은 건드리지 않는다) */
-  function renderAuthButtonOnly() {
-    var a = ui.auth;
-    var isSignup = a.mode === "signup";
-    var canSubmit =
-      !a.busy && a.email.indexOf("@") > 0 && a.password.length >= 6 && (!isSignup || !!a.name.trim());
-    var btn = el("authSubmit");
-    if (!btn) return;
-    btn.disabled = !canSubmit;
-    btn.style.cssText = bigButtonStyle(canSubmit, "margin-top:22px;");
+  /** 타이핑을 시작하면 지적을 지운다. 입력창 자체는 건드리지 않는다. */
+  function clearAuthError() {
+    if (!ui.auth.error) return;
+    ui.auth.error = "";
+    show("authError", false);
+    text("authErrorText", "");
   }
 
   /* 엔터로 로그인 */
@@ -1534,7 +1583,20 @@
      비운 채 나갔으면 원래 값으로 되돌린다 (이름 없는 카테고리는 만들지 않는다). */
   document.addEventListener("blur", function (ev) {
     var node = ev.target;
-    if (!node.getAttribute || !node.getAttribute("data-catfield")) return;
+    if (!node.getAttribute) return;
+
+    /* 계정 입력: 칸을 벗어날 때 형식을 확인한다 */
+    var elName = node.getAttribute("data-el");
+    if (elName === "authEmail" || elName === "authPassword" || elName === "authName") {
+      var problem = authBlurProblem(elName);
+      if (problem) {
+        ui.auth.error = problem;
+        render();
+      }
+      return;
+    }
+
+    if (!node.getAttribute("data-catfield")) return;
     var id = node.getAttribute("data-id");
     var field = node.getAttribute("data-catfield");
 

@@ -386,6 +386,22 @@
     ok("초대코드: 짧으면 거부", !model.isInviteCode("ABC"));
     ok("초대코드: 방금 만든 코드는 유효", model.isInviteCode(model.newInviteCode()));
 
+    /* ---------- 18.5 이메일 형식 ---------- */
+    ok("이메일: 평범한 주소", model.isEmail("a@test.com"));
+    ok("이메일: 점이 여러 개인 도메인", model.isEmail("me@mail.co.kr"));
+    ok("이메일: 앞뒤 공백은 무시", model.isEmail("  me@mail.com  "));
+    ok("이메일: 플러스 표기 허용", model.isEmail("me+trip@mail.com"));
+    ok("이메일: @가 없으면 거부", !model.isEmail("test.com"));
+    ok("이메일: 도메인에 점이 없으면 거부", !model.isEmail("a@b"));
+    ok("이메일: 최상위가 한 글자면 거부", !model.isEmail("a@b.c"));
+    ok("이메일: 아이디가 없으면 거부", !model.isEmail("@test.com"));
+    ok("이메일: 도메인이 없으면 거부", !model.isEmail("a@"));
+    ok("이메일: 공백이 섞이면 거부", !model.isEmail("a b@test.com"));
+    ok("이메일: @가 두 개면 거부", !model.isEmail("a@b@test.com"));
+    ok("이메일: 빈 값 거부", !model.isEmail(""));
+    ok("이메일: 문자열이 아니면 거부", !model.isEmail(null));
+    eq("비밀번호 최소 길이", model.MIN_PASSWORD, 6);
+
     /* ---------- 19. 지출에 누가 썼는지 ---------- */
     var withUser = model.normalizeExpense({
       id: "x1", budgetId: "t1", amount: 100, date: "2026-08-01",

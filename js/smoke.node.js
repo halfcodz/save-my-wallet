@@ -286,6 +286,9 @@ async function tick(n = 6) {
     n.value = v;
     n.dispatchEvent(new win.Event("input", { bubbles: true }));
   };
+  // blur 는 버블링하지 않지만, document 의 캡처 리스너에는 잡힌다
+  const blur = (name) => el(name).dispatchEvent(new win.Event("blur"));
+  const errorText = () => (visible("authError") ? txt("authErrorText") : "");
 
   await tick();
 
@@ -294,16 +297,61 @@ async function tick(n = 6) {
   ok("설정 안내는 안 뜬다 (설정이 채워져 있으므로)", !visible("authSetup"));
   ok("가계부 본문은 아직 안 보인다", !visible("hasBudget") && !visible("noBudget"));
 
-  /* --- 2. 회원가입 --- */
+  eq("로그인 화면 제목", txt("authTitle"), "환영합니다");
+  ["authEmail", "authPassword", "authName"].forEach((n) => {
+    ok(`${n} 에 힌트(placeholder)가 없다`, !el(n).getAttribute("placeholder"));
+  });
+
+  /* --- 2. 형식 검사 --- */
   click('[data-act="authModeSignup"]');
   await tick(2);
   ok("회원가입 탭에서 이름 칸이 보인다", visible("isSignup"));
+  eq("회원가입 화면 제목", txt("authTitle"), "가계부를 시작합니다");
+  ok("아직 지적은 없다", !visible("authError"));
 
+  // 빈 채로 눌러도 버튼은 눌리고, 무엇이 빠졌는지 알려 준다
+  ok("빈 값이어도 버튼은 눌린다", el("authSubmit").disabled === false);
+  click('[data-act="authSubmit"]');
+  await tick(3);
+  ok("빈 채로 누르면 이름부터 지적한다", errorText().includes("이름"), errorText());
+
+  // 이메일 형식
   type("authName", "지민");
-  type("authEmail", "a@test.com");
-  type("authPassword", "secret1");
-  ok("입력이 다 차면 버튼이 켜진다", el("authSubmit").disabled === false);
+  await tick(2);
+  ok("고치기 시작하면 지적이 사라진다", !visible("authError"));
+  click('[data-act="authSubmit"]');
+  await tick(3);
+  ok("이름을 채우면 다음은 이메일을 지적한다", errorText().includes("이메일"), errorText());
 
+  type("authEmail", "a@b");
+  blur("authEmail");
+  await tick(3);
+  ok("칸을 벗어나면 이메일 형식을 바로 지적한다", errorText().includes("형식"), errorText());
+  ok("올바른 예시를 보여 준다", errorText().includes("name@example.com"), errorText());
+
+  type("authEmail", "지민 골뱅이 test.com");
+  blur("authEmail");
+  await tick(3);
+  ok("@ 가 없어도 지적한다", errorText().includes("형식"), errorText());
+
+  // 비밀번호 길이
+  type("authEmail", "a@test.com");
+  blur("authEmail");
+  await tick(3);
+  ok("올바른 이메일에는 지적이 없다", !visible("authError"), errorText());
+
+  type("authPassword", "abc");
+  blur("authPassword");
+  await tick(3);
+  ok("짧은 비밀번호를 지적한다", errorText().includes("6자"), errorText());
+  ok("지금 몇 자인지도 알려 준다", errorText().includes("3자"), errorText());
+
+  type("authPassword", "secret1");
+  blur("authPassword");
+  await tick(3);
+  ok("길이를 채우면 지적이 사라진다", !visible("authError"), errorText());
+
+  /* --- 3. 회원가입 --- */
   click('[data-act="authSubmit"]');
   await tick(12);
 
@@ -313,7 +361,7 @@ async function tick(n = 6) {
   eq("기본 카테고리 14개가 계정에 저장된다", fake.docs.get("users/uid_1").categories.length, 14);
   eq("표시 이름이 저장된다", fake.docs.get("users/uid_1").displayName, "지민");
 
-  /* --- 3. 예산 만들기 --- */
+  /* --- 4. 예산 만들기 --- */
   click('[data-act="openBudget"]');
   await tick(2);
   ok("예산 시트가 열린다", visible("budgetOpen"));

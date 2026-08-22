@@ -69,7 +69,7 @@
   <!-- ===== 로그인 / 회원가입 ===== -->
   <div data-show="authForm" style="flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;justify-content:center;padding:32px 24px">
     <div style="font-size:13px;color:var(--g3);letter-spacing:.02em">가계부</div>
-    <div data-el="authTitle" style="font-size:26px;font-weight:700;line-height:1.35;letter-spacing:-.02em;margin-top:8px">다시 오셨네요</div>
+    <div data-el="authTitle" style="font-size:26px;font-weight:700;line-height:1.35;letter-spacing:-.02em;margin-top:8px">환영합니다</div>
 
     <div style="display:flex;gap:20px;margin-top:26px;border-bottom:1px solid var(--g2)">
       <button data-act="authModeLogin" data-el="tabLogin">로그인</button>
@@ -78,17 +78,17 @@
 
     <div data-show="isSignup" style="padding-top:18px">
       <div style="font-size:11px;color:var(--g3);padding-bottom:5px">이름</div>
-      <input data-el="authName" autocomplete="nickname" maxlength="20" placeholder="같이 쓸 때 보이는 이름" style="width:100%;border:none;border-bottom:1px solid var(--g2);padding:9px 0;font-size:15px;outline:none" />
+      <input data-el="authName" autocomplete="nickname" maxlength="20" style="width:100%;border:none;border-bottom:1px solid var(--g2);padding:9px 0;font-size:15px;outline:none" />
     </div>
 
     <div style="padding-top:18px">
       <div style="font-size:11px;color:var(--g3);padding-bottom:5px">이메일</div>
-      <input data-el="authEmail" type="email" inputmode="email" autocomplete="email" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="you@example.com" style="width:100%;border:none;border-bottom:1px solid var(--g2);padding:9px 0;font-size:15px;outline:none" />
+      <input data-el="authEmail" type="email" inputmode="email" autocomplete="email" autocapitalize="off" autocorrect="off" spellcheck="false" style="width:100%;border:none;border-bottom:1px solid var(--g2);padding:9px 0;font-size:15px;outline:none" />
     </div>
 
     <div style="padding-top:18px">
       <div style="font-size:11px;color:var(--g3);padding-bottom:5px">비밀번호</div>
-      <input data-el="authPassword" type="password" autocomplete="current-password" placeholder="6자 이상" style="width:100%;border:none;border-bottom:1px solid var(--g2);padding:9px 0;font-size:15px;outline:none" />
+      <input data-el="authPassword" type="password" autocomplete="current-password" style="width:100%;border:none;border-bottom:1px solid var(--g2);padding:9px 0;font-size:15px;outline:none" />
     </div>
 
     <div data-show="authError" style="margin-top:16px;border-radius:11px;background:var(--g1);padding:12px 14px;font-size:12.5px;line-height:1.6">

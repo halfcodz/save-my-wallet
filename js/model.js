@@ -61,6 +61,24 @@
     return typeof s === "string" && s.length === INVITE_LENGTH && /^[A-Z0-9]+$/.test(s);
   }
 
+  /* ---------- 계정 입력 검사 ---------- */
+
+  var MIN_PASSWORD = 6; // Firebase가 요구하는 최소 길이
+  var MAX_NAME = 20;
+
+  /**
+   * 이메일 형식 검사.
+   * 규격을 완벽히 따르려는 게 아니라 오타를 잡아 주는 것이 목적이다.
+   * (진짜 존재하는 주소인지는 서버만 안다)
+   */
+  function isEmail(s) {
+    if (typeof s !== "string") return false;
+    var v = s.trim();
+    if (!v || v.length > 254) return false;
+    // 공백 없이 로컬@도메인.최상위(2자 이상)
+    return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v);
+  }
+
   /* ---------- 초기값 ---------- */
 
   function defaultCategories() {
@@ -307,6 +325,9 @@
     DEFAULT_CATEGORIES: DEFAULT_CATEGORIES,
     INVITE_LENGTH: INVITE_LENGTH,
     MAX_MEMBERS: MAX_MEMBERS,
+    MIN_PASSWORD: MIN_PASSWORD,
+    MAX_NAME: MAX_NAME,
+    isEmail: isEmail,
     clone: clone,
     uid: uid,
     newInviteCode: newInviteCode,
