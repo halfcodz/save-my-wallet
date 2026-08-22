@@ -1,3 +1,22 @@
+/* ---- 화면 크기 대응 (ScreenUtil과 같은 방식) ----
+
+   기준 화면은 시안과 같은 390 × 844.
+   앱의 모든 치수는 rem으로 적어 두었고, 루트 글자 크기가 곧 배율이다.
+     390px 폭 -> 16px -> 배율 1.0  (기준 화면에서는 예전과 픽셀까지 동일)
+     360px 폭 -> 14.8px -> 0.92
+     430px 폭 -> 17.6px -> 1.10
+
+   폭과 높이 중 더 빡빡한 쪽을 따른다. 폭만 보면 화면이 낮은 기기(가로 모드,
+   작은 구형 기기)에서 내용이 잘리기 때문이다. 높이 기준(44)은 폭보다 느슨하게
+   잡아, 정말 낮은 화면에서만 개입한다.
+
+   프레임은 430px에서 멈추므로 태블릿·데스크톱에서도 더 커지지 않는다.
+   1px 실선과 2px 테두리는 rem으로 바꾸지 않았다. 배율이 줄어도 선은 선이어야 한다. */
+html {
+  font-size: 16px; /* min()을 모르는 옛 브라우저용 */
+  font-size: clamp(13px, min(min(100vw, 430px) / 24.375, 100dvh / 44), 19px);
+}
+
 /* 디자인 원본(helmet)의 스타일 — 값 변경 없음 */
 :root { --bg:#ffffff; --fg:#111111; --g3:#767676; --g2:#dcdcdc; --g1:#f3f3f3; color-scheme: light; }
 html[data-mm="dark"] { --bg:#0a0a0a; --fg:#f4f4f4; --g3:#8f8f8f; --g2:#333333; --g1:#191919; color-scheme: dark; }
@@ -8,7 +27,7 @@ button, input { font-family: inherit; color: inherit; }
 input { background: transparent; }
 a { color: var(--fg); text-decoration: underline; }
 a:hover { color: var(--g3); }
-@keyframes mmUp { from { transform: translateY(16px); opacity: 0 } to { transform: none; opacity: 1 } }
+@keyframes mmUp { from { transform: translateY(1rem); opacity: 0 } to { transform: none; opacity: 1 } }
 
 /* ---- 아래는 로직을 붙이면서 필요해진 것들. 디자인 값은 건드리지 않는다. ---- */
 
@@ -54,11 +73,11 @@ html[data-mm="dark"] {
 /* ---- 달력 ---- */
 
 /* 항상 6주. 달을 넘겨도 높이가 흔들리지 않는다. */
-.mm-cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; background: var(--g2); border: 1px solid var(--g2); border-radius: 12px; overflow: hidden; }
-.mm-cal-cell { background: var(--bg); min-height: 74px; padding: 5px 5px 4px; display: flex; flex-direction: column; gap: 2px; border: none; text-align: left; font: inherit; color: inherit; }
+.mm-cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; background: var(--g2); border: 1px solid var(--g2); border-radius: 0.75rem; overflow: hidden; }
+.mm-cal-cell { background: var(--bg); min-height: 4.625rem; padding: 0.3125rem 0.3125rem 0.25rem; display: flex; flex-direction: column; gap: 2px; border: none; text-align: left; font: inherit; color: inherit; }
 .mm-cal-cell[disabled] { opacity: .38; }
-.mm-cal-dow { display: grid; grid-template-columns: repeat(7, 1fr); padding: 0 0 6px; }
-.mm-cal-dow > div { text-align: center; font-size: 11px; color: var(--g3); }
+.mm-cal-dow { display: grid; grid-template-columns: repeat(7, 1fr); padding: 0 0 0.375rem; }
+.mm-cal-dow > div { text-align: center; font-size: 0.6875rem; color: var(--g3); }
 
 /* ---- 아이폰 상태바(다이나믹 아일랜드) 자리 ---- */
 
@@ -90,7 +109,7 @@ html, body { overscroll-behavior: none; }
 }
 .mm-ptr-move { opacity: 0; will-change: transform; }
 .mm-ptr-dot {
-  width: 26px; height: 26px; border-radius: 50%;
+  width: 1.625rem; height: 1.625rem; border-radius: 50%;
   border: 2px solid var(--g2);
   border-top-color: var(--fg);
   background: var(--bg);
@@ -98,7 +117,7 @@ html, body { overscroll-behavior: none; }
 .mm-ptr-busy .mm-ptr-dot { animation: mmSpin .7s linear infinite; }
 
 .mm-spin {
-  width: 26px; height: 26px; border-radius: 50%;
+  width: 1.625rem; height: 1.625rem; border-radius: 50%;
   border: 2px solid var(--g2);
   border-top-color: var(--fg);
   animation: mmSpin .7s linear infinite;

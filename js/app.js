@@ -92,18 +92,39 @@
   }
 
   /**
-   * 큰 금액이 화면 밖으로 넘칠 때만 글자를 줄인다.
-   * 평소에는 디자인 크기 그대로.
+   * 지금 배율. 루트 글자 크기 16px이 기준 화면(390px 폭)이고 배율 1이다.
+   * 화면이 바뀌기 전까지 값이 그대로라 한 번만 재고 아껴 쓴다.
    */
-  function fit(node, sibling, basePx, gapPx) {
+  var scaleCache = null;
+  function scale() {
+    if (scaleCache !== null) return scaleCache;
+    var root = 16;
+    try {
+      root = parseFloat(window.getComputedStyle(document.documentElement).fontSize);
+    } catch (e) {}
+    scaleCache = isFinite(root) && root > 0 ? root / 16 : 1;
+    return scaleCache;
+  }
+
+  /** 기준 화면 기준의 px을 지금 화면의 px로 */
+  function px(designPx) {
+    return designPx * scale();
+  }
+
+  /**
+   * 큰 금액이 화면 밖으로 넘칠 때만 글자를 줄인다.
+   * 받는 값은 기준 화면(390px) 기준의 px이고, 그릴 때 배율을 곱한다.
+   */
+  function fit(node, sibling, baseDesignPx, gapDesignPx) {
     if (!node) return;
+    var basePx = px(baseDesignPx);
     node.style.fontSize = basePx + "px";
     var row = node.parentNode;
     if (!row || !row.clientWidth) return; // 숨겨진 상태면 측정 불가
-    var avail = row.clientWidth - (sibling ? sibling.offsetWidth : 0) - (gapPx || 0);
+    var avail = row.clientWidth - (sibling ? sibling.offsetWidth : 0) - px(gapDesignPx || 0);
     var want = node.scrollWidth;
     if (avail > 0 && want > avail) {
-      node.style.fontSize = Math.max(11, Math.floor(basePx * (avail / want))) + "px";
+      node.style.fontSize = Math.max(px(11), Math.floor(basePx * (avail / want))) + "px";
     }
   }
 
@@ -161,12 +182,12 @@
 
   /* ---------- 디자인의 동적 스타일 문자열 ---------- */
 
-  var STRIPES = "repeating-linear-gradient(115deg, var(--fg) 0 6px, var(--g3) 6px 11px)";
+  var STRIPES = "repeating-linear-gradient(115deg, var(--fg) 0 0.375rem, var(--g3) 0.375rem 0.6875rem)";
 
   function tabStyle(name) {
     var on = ui.tab === name;
     return (
-      "border:none;background:none;padding:4px 0;font-size:13.5px;font-weight:" +
+      "border:none;background:none;padding:0.25rem 0;font-size:0.84375rem;font-weight:" +
       (on ? "700" : "400") +
       ";color:" + (on ? "var(--fg)" : "var(--g3)")
     );
@@ -174,7 +195,7 @@
 
   function authTabStyle(on) {
     return (
-      "border:none;background:none;min-height:44px;padding:10px 2px;font-size:15px;letter-spacing:-.02em;font-weight:" +
+      "border:none;background:none;min-height:2.75rem;padding:0.625rem 2px;font-size:0.9375rem;letter-spacing:-.02em;font-weight:" +
       (on ? "800" : "500") +
       ";color:" + (on ? "var(--fg)" : "var(--g3)") +
       ";border-bottom:2px solid " + (on ? "var(--fg)" : "transparent") +
@@ -184,7 +205,7 @@
 
   function chipStyle(on) {
     return (
-      "white-space:nowrap;border-radius:999px;padding:7px 13px;font-size:12px;font-weight:600;border:1px solid " +
+      "white-space:nowrap;border-radius:999px;padding:0.4375rem 0.8125rem;font-size:0.75rem;font-weight:600;border:1px solid " +
       (on ? "var(--fg)" : "var(--g2)") +
       ";background:" + (on ? "var(--fg)" : "transparent") +
       ";color:" + (on ? "var(--bg)" : "var(--g3)")
@@ -193,7 +214,7 @@
 
   function checkStyle(checked) {
     return (
-      "flex:0 0 auto;width:22px;height:22px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;border:1px solid " +
+      "flex:0 0 auto;width:1.375rem;height:1.375rem;border-radius:0.6875rem;display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:800;border:1px solid " +
       (checked ? "var(--fg)" : "var(--g2)") +
       ";background:" + (checked ? "var(--fg)" : "transparent") + ";color:var(--bg)"
     );
@@ -202,7 +223,7 @@
   /** 네모 체크 상자 (로그인 유지) */
   function keepBoxStyle(on) {
     return (
-      "flex:0 0 auto;width:20px;height:20px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;border:1px solid " +
+      "flex:0 0 auto;width:1.25rem;height:1.25rem;border-radius:0.375rem;display:flex;align-items:center;justify-content:center;font-size:0.6875rem;font-weight:800;border:1px solid " +
       (on ? "var(--fg)" : "var(--g2)") +
       ";background:" + (on ? "var(--fg)" : "transparent") + ";color:var(--bg)"
     );
@@ -210,7 +231,7 @@
 
   function catButtonStyle(selected) {
     return (
-      "display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;height:clamp(42px,6.4dvh,60px);border-radius:12px;padding:2px;border:1px solid " +
+      "display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;height:clamp(2.625rem,6.4dvh,3.75rem);border-radius:0.75rem;padding:2px;border:1px solid " +
       (selected ? "var(--fg)" : "var(--g2)") +
       ";background:" + (selected ? "var(--fg)" : "transparent") +
       ";color:" + (selected ? "var(--bg)" : "var(--fg)")
@@ -220,7 +241,7 @@
   function bigButtonStyle(on, extra) {
     return (
       (extra || "") +
-      "width:100%;height:54px;border:none;border-radius:14px;font-size:16px;font-weight:700;background:" +
+      "width:100%;height:3.375rem;border:none;border-radius:0.875rem;font-size:1rem;font-weight:700;background:" +
       (on ? "var(--fg)" : "var(--g1)") + ";color:" + (on ? "var(--bg)" : "var(--g3)")
     );
   }
@@ -228,7 +249,7 @@
   /* 시트 안의 주 버튼 (예산·공유 화면) */
   function sheetButtonStyle(on) {
     return (
-      "margin-top:14px;width:100%;height:50px;border:none;border-radius:13px;font-size:15px;font-weight:700;background:" +
+      "margin-top:0.875rem;width:100%;height:3.125rem;border:none;border-radius:0.8125rem;font-size:0.9375rem;font-weight:700;background:" +
       (on ? "var(--fg)" : "var(--g1)") + ";color:" + (on ? "var(--bg)" : "var(--g3)")
     );
   }
@@ -243,7 +264,7 @@
     var name = calc.memberName(budget, e.uid, e.userName);
     var mine = e.uid && e.uid === me().uid;
     return (
-      '<span style="font-size:11px;font-weight:600;color:var(--g3);margin-left:6px">' +
+      '<span style="font-size:0.6875rem;font-weight:600;color:var(--g3);margin-left:0.375rem">' +
       esc(mine ? "나" : name) + "</span>"
     );
   }
@@ -258,11 +279,11 @@
     }
     return (
       '<button data-act="editExpense" data-id="' + esc(e.id) +
-        '" style="display:flex;align-items:baseline;gap:12px;width:100%;border:none;background:none;padding:14px 0;text-align:left;border-bottom:1px solid var(--g1)">' +
-        '<span style="flex:1;min-width:0;font-size:14.5px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
+        '" style="display:flex;align-items:baseline;gap:0.75rem;width:100%;border:none;background:none;padding:0.875rem 0;text-align:left;border-bottom:1px solid var(--g1)">' +
+        '<span style="flex:1;min-width:0;font-size:0.90625rem;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
           esc(title) + "</span>" +
-        (who ? '<span style="flex:0 0 auto;font-size:11px;color:var(--g3)">' + esc(who) + "</span>" : "") +
-        '<span style="flex:0 0 auto;font-size:15px;font-weight:600;letter-spacing:-.02em">' + esc(calc.formatWon(e.amount)) + "</span>" +
+        (who ? '<span style="flex:0 0 auto;font-size:0.6875rem;color:var(--g3)">' + esc(who) + "</span>" : "") +
+        '<span style="flex:0 0 auto;font-size:0.9375rem;font-weight:600;letter-spacing:-.02em">' + esc(calc.formatWon(e.amount)) + "</span>" +
       "</button>"
     );
   }
@@ -352,25 +373,25 @@
     var st = calc.computeBudgetStats(b, data.expenses, today);
     return (
       '<button data-act="pickBudget" data-id="' + esc(b.id) +
-        '" style="display:flex;align-items:center;gap:12px;width:100%;text-align:left;border:none;background:none;padding:11px 16px">' +
-        '<span style="flex:0 0 auto;width:20px;text-align:center;font-size:13px;font-weight:800">' +
+        '" style="display:flex;align-items:center;gap:0.75rem;width:100%;text-align:left;border:none;background:none;padding:0.6875rem 1rem">' +
+        '<span style="flex:0 0 auto;width:1.25rem;text-align:center;font-size:0.8125rem;font-weight:800">' +
           (on ? "✓" : "") + "</span>" +
         '<span style="flex:1;min-width:0">' +
-          '<span style="display:block;font-size:15px;font-weight:' + (on ? "700" : "600") +
+          '<span style="display:block;font-size:0.9375rem;font-weight:' + (on ? "700" : "600") +
             ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
             esc((b.shared ? "👥 " : "") + b.name) + "</span>" +
-          '<span style="display:block;font-size:11px;color:var(--g3);margin-top:3px">' +
+          '<span style="display:block;font-size:0.6875rem;color:var(--g3);margin-top:0.1875rem">' +
             esc(budgetPeriodText(b) + " · " + calc.formatWon(st.spent) + " / " +
                 calc.formatWon(b.totalAmount) + "원") + "</span>" +
         "</span>" +
-        '<span style="flex:0 0 auto;font-size:10px;font-weight:700;color:var(--g3)">' +
+        '<span style="flex:0 0 auto;font-size:0.625rem;font-weight:700;color:var(--g3)">' +
           esc(budgetStateLabel(b)) + "</span>" +
       "</button>"
     );
   }
 
   function switcherHeadHTML(label) {
-    return '<div style="font-size:11px;color:var(--g3);padding:10px 16px 2px">' + esc(label) + "</div>";
+    return '<div style="font-size:0.6875rem;color:var(--g3);padding:0.625rem 1rem 2px">' + esc(label) + "</div>";
   }
 
   /** 예산 고르기 시트 — 나의 가계부와 여행을 나눠 보여준다 */
@@ -396,11 +417,11 @@
     var out = switcherHeadHTML("나의 가계부");
     out += personal
       ? switcherRowHTML(personal, activeId)
-      : '<button data-act="openPersonal" style="display:flex;align-items:center;gap:12px;width:100%;text-align:left;border:none;background:none;padding:11px 16px">' +
-          '<span style="flex:0 0 auto;width:20px;text-align:center;font-size:16px">＋</span>' +
+      : '<button data-act="openPersonal" style="display:flex;align-items:center;gap:0.75rem;width:100%;text-align:left;border:none;background:none;padding:0.6875rem 1rem">' +
+          '<span style="flex:0 0 auto;width:1.25rem;text-align:center;font-size:1rem">＋</span>' +
           '<span style="flex:1;min-width:0">' +
-            '<span style="display:block;font-size:15px;font-weight:600">나의 가계부 만들기</span>' +
-            '<span style="display:block;font-size:11px;color:var(--g3);margin-top:3px">여행과 따로, 달마다 이어지는 가계부</span>' +
+            '<span style="display:block;font-size:0.9375rem;font-weight:600">나의 가계부 만들기</span>' +
+            '<span style="display:block;font-size:0.6875rem;color:var(--g3);margin-top:0.1875rem">여행과 따로, 달마다 이어지는 가계부</span>' +
           "</span></button>";
 
     if (trips.length) {
@@ -541,7 +562,7 @@
     if (btn) {
       btn.disabled = a.busy;
       btn.textContent = label;
-      btn.style.cssText = bigButtonStyle(!a.busy, "margin-top:22px;");
+      btn.style.cssText = bigButtonStyle(!a.busy, "margin-top:1.375rem;");
     }
   }
 
@@ -596,7 +617,7 @@
   function calToggleStyle() {
     var on = ui.historyView === "calendar";
     return (
-      "flex:0 0 auto;width:32px;height:32px;padding:0;border-radius:9px;display:grid;place-items:center;border:1px solid " +
+      "flex:0 0 auto;width:2rem;height:2rem;padding:0;border-radius:0.5625rem;display:grid;place-items:center;border:1px solid " +
       (on ? "var(--fg)" : "var(--g2)") +
       ";background:" + (on ? "var(--fg)" : "none") +
       ";color:" + (on ? "var(--bg)" : "var(--fg)")
@@ -624,10 +645,10 @@
               var dim = !cell.inMonth || outside;
 
               var num =
-                '<div style="display:flex;align-items:center;gap:3px">' +
-                  '<span style="font-size:11px;font-weight:' + (isToday ? "800" : "600") + ';' +
+                '<div style="display:flex;align-items:center;gap:0.1875rem">' +
+                  '<span style="font-size:0.6875rem;font-weight:' + (isToday ? "800" : "600") + ';' +
                     (isToday
-                      ? "background:var(--fg);color:var(--bg);border-radius:9px;min-width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;padding:0 4px"
+                      ? "background:var(--fg);color:var(--bg);border-radius:0.5625rem;min-width:1.125rem;height:1.125rem;display:inline-flex;align-items:center;justify-content:center;padding:0 0.25rem"
                       : "color:var(--g3)") +
                   '">' + Number(cell.date.slice(8)) + "</span>" +
                 "</div>";
@@ -641,9 +662,9 @@
                   })
                   .join("");
                 body =
-                  '<div style="font-size:10.5px;font-weight:800;letter-spacing:-.03em;line-height:1.2;word-break:break-all">' +
+                  '<div style="font-size:0.65625rem;font-weight:800;letter-spacing:-.03em;line-height:1.2;word-break:break-all">' +
                     esc(calc.formatWon(day.sum)) + "</div>" +
-                  '<div style="font-size:10px;line-height:1.2">' + emojis +
+                  '<div style="font-size:0.625rem;line-height:1.2">' + emojis +
                     (day.items.length > 3 ? '<span style="color:var(--g3)">+' + (day.items.length - 3) + "</span>" : "") +
                   "</div>";
               }
@@ -683,25 +704,25 @@
             .map(function (e) {
               var c = calc.resolveCategory(e, data.categories);
               return (
-                '<div style="display:flex;align-items:center;gap:10px;padding:12px 0;border-top:1px solid var(--g1)">' +
+                '<div style="display:flex;align-items:center;gap:0.625rem;padding:0.75rem 0;border-top:1px solid var(--g1)">' +
                   '<button data-act="editExpense" data-id="' + esc(e.id) +
-                    '" style="flex:1;min-width:0;display:flex;align-items:center;gap:11px;border:none;background:none;padding:0;text-align:left">' +
-                    '<span style="font-size:19px;width:24px;text-align:center">' + esc(c.emoji) + "</span>" +
+                    '" style="flex:1;min-width:0;display:flex;align-items:center;gap:0.6875rem;border:none;background:none;padding:0;text-align:left">' +
+                    '<span style="font-size:1.1875rem;width:1.5rem;text-align:center">' + esc(c.emoji) + "</span>" +
                     '<span style="flex:1;min-width:0">' +
-                      '<span style="display:block;font-size:14px;font-weight:600">' + esc(c.name) + writerTag(e, view) + "</span>" +
+                      '<span style="display:block;font-size:0.875rem;font-weight:600">' + esc(c.name) + writerTag(e, view) + "</span>" +
                       (e.memo
-                        ? '<span style="display:block;font-size:12px;color:var(--g3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(e.memo) + "</span>"
+                        ? '<span style="display:block;font-size:0.75rem;color:var(--g3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(e.memo) + "</span>"
                         : "") +
                     "</span>" +
-                    '<span style="font-size:15px;font-weight:700;letter-spacing:-.02em">' + esc(calc.formatWon(e.amount)) + "</span>" +
+                    '<span style="font-size:0.9375rem;font-weight:700;letter-spacing:-.02em">' + esc(calc.formatWon(e.amount)) + "</span>" +
                   "</button>" +
                   '<button data-act="removeExpense" data-id="' + esc(e.id) +
-                    '" style="flex:0 0 auto;border:none;background:none;padding:6px 2px;font-size:12px;color:var(--g3)">삭제</button>' +
+                    '" style="flex:0 0 auto;border:none;background:none;padding:0.375rem 2px;font-size:0.75rem;color:var(--g3)">삭제</button>' +
                 "</div>"
               );
             })
             .join("")
-        : '<div style="padding:26px 0;text-align:center;font-size:13px;color:var(--g3)">이 날은 기록이 없습니다</div>'
+        : '<div style="padding:1.625rem 0;text-align:center;font-size:0.8125rem;color:var(--g3)">이 날은 기록이 없습니다</div>'
     );
   }
 
@@ -715,10 +736,10 @@
 
   function dayGroupHTML(g, view) {
     return (
-      '<div style="padding-bottom:18px">' +
-        '<div style="display:flex;justify-content:space-between;align-items:baseline;padding:10px 0 4px">' +
-          '<div style="font-size:12px;font-weight:700;color:var(--g3)">' + esc(calc.dayLabel(g.date, today)) + "</div>" +
-          '<div style="font-size:12px;color:var(--g3)">' + esc(calc.formatWon(g.sum)) + "원</div>" +
+      '<div style="padding-bottom:1.125rem">' +
+        '<div style="display:flex;justify-content:space-between;align-items:baseline;padding:0.625rem 0 0.25rem">' +
+          '<div style="font-size:0.75rem;font-weight:700;color:var(--g3)">' + esc(calc.dayLabel(g.date, today)) + "</div>" +
+          '<div style="font-size:0.75rem;color:var(--g3)">' + esc(calc.formatWon(g.sum)) + "원</div>" +
         "</div>" +
         rowsHTML(g, view) +
       "</div>"
@@ -728,16 +749,16 @@
   /* 오늘 쓴 것이 제일 궁금하다. 테두리를 둘러 목록에서 먼저 눈에 띄게 한다. */
   function todayGroupHTML(g, view) {
     return (
-      '<div style="border:1px solid var(--fg);border-radius:16px;padding:2px 14px 10px;margin:2px 0 20px">' +
-        '<div style="display:flex;justify-content:space-between;align-items:baseline;padding:13px 0 7px">' +
-          '<div style="font-size:14px;font-weight:800;letter-spacing:-.01em">오늘' +
-            '<span style="font-size:11px;font-weight:600;color:var(--g3);margin-left:7px">' +
+      '<div style="border:1px solid var(--fg);border-radius:1rem;padding:2px 0.875rem 0.625rem;margin:2px 0 1.25rem">' +
+        '<div style="display:flex;justify-content:space-between;align-items:baseline;padding:0.8125rem 0 0.4375rem">' +
+          '<div style="font-size:0.875rem;font-weight:800;letter-spacing:-.01em">오늘' +
+            '<span style="font-size:0.6875rem;font-weight:600;color:var(--g3);margin-left:0.4375rem">' +
               esc(calc.dayLabel(g.date, null)) + "</span></div>" +
-          '<div style="font-size:19px;font-weight:800;letter-spacing:-.03em">' + esc(calc.formatWon(g.sum)) +
-            '<span style="font-size:12px;font-weight:600;color:var(--g3);margin-left:2px">원</span></div>' +
+          '<div style="font-size:1.1875rem;font-weight:800;letter-spacing:-.03em">' + esc(calc.formatWon(g.sum)) +
+            '<span style="font-size:0.75rem;font-weight:600;color:var(--g3);margin-left:2px">원</span></div>' +
         "</div>" +
         rowsHTML(g, view) +
-        '<div style="font-size:11px;color:var(--g3);padding-top:9px">' + g.items.length + "건</div>" +
+        '<div style="font-size:0.6875rem;color:var(--g3);padding-top:0.5625rem">' + g.items.length + "건</div>" +
       "</div>"
     );
   }
@@ -747,19 +768,19 @@
     return (
       '<div style="position:relative;overflow:hidden;border-top:1px solid var(--g1)">' +
         '<div style="position:absolute;inset:0;display:flex;justify-content:flex-end">' +
-          '<button data-act="editExpense" data-id="' + esc(e.id) + '" style="width:70px;border:none;background:var(--g1);font-size:13px;font-weight:600">수정</button>' +
-          '<button data-act="removeExpense" data-id="' + esc(e.id) + '" style="width:70px;border:none;background:var(--fg);color:var(--bg);font-size:13px;font-weight:600">삭제</button>' +
+          '<button data-act="editExpense" data-id="' + esc(e.id) + '" style="width:4.375rem;border:none;background:var(--g1);font-size:0.8125rem;font-weight:600">수정</button>' +
+          '<button data-act="removeExpense" data-id="' + esc(e.id) + '" style="width:4.375rem;border:none;background:var(--fg);color:var(--bg);font-size:0.8125rem;font-weight:600">삭제</button>' +
         "</div>" +
-        '<div data-row="' + esc(e.id) + '" class="mm-row" style="position:relative;display:flex;align-items:center;gap:12px;padding:13px 2px;background:var(--bg);transition:transform .18s ease;touch-action:pan-y;cursor:pointer">' +
+        '<div data-row="' + esc(e.id) + '" class="mm-row" style="position:relative;display:flex;align-items:center;gap:0.75rem;padding:0.8125rem 2px;background:var(--bg);transition:transform .18s ease;touch-action:pan-y;cursor:pointer">' +
           (ui.selMode ? '<div data-check="' + esc(e.id) + '"></div>' : "") +
-          '<div style="font-size:20px;width:26px;text-align:center">' + esc(c.emoji) + "</div>" +
+          '<div style="font-size:1.25rem;width:1.625rem;text-align:center">' + esc(c.emoji) + "</div>" +
           '<div style="flex:1;min-width:0">' +
-            '<div style="font-size:14px;font-weight:600">' + esc(c.name) + writerTag(e, budget) + "</div>" +
+            '<div style="font-size:0.875rem;font-weight:600">' + esc(c.name) + writerTag(e, budget) + "</div>" +
             (e.memo
-              ? '<div style="font-size:12px;color:var(--g3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(e.memo) + "</div>"
+              ? '<div style="font-size:0.75rem;color:var(--g3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(e.memo) + "</div>"
               : "") +
           "</div>" +
-          '<div style="font-size:16px;font-weight:700;letter-spacing:-.02em">' + esc(calc.formatWon(e.amount)) + "</div>" +
+          '<div style="font-size:1rem;font-weight:700;letter-spacing:-.02em">' + esc(calc.formatWon(e.amount)) + "</div>" +
         "</div>" +
       "</div>"
     );
@@ -772,7 +793,8 @@
     for (var i = 0; i < rows.length; i++) {
       var id = rows[i].getAttribute("data-row");
       var open = !ui.selMode && ui.swipedId === id;
-      rows[i].style.transform = open ? "translateX(-140px)" : "translateX(0)";
+      // 뒤에 숨은 수정·삭제 버튼 두 개(4.375rem씩)만큼 밀어낸다
+      rows[i].style.transform = open ? "translateX(-8.75rem)" : "translateX(0)";
     }
     var checks = document.querySelectorAll("[data-check]");
     for (var j = 0; j < checks.length; j++) {
@@ -794,14 +816,14 @@
   /* 요약의 한 줄. 색점이 도넛 조각과 짝을 이루고, 막대 없이 숫자로 읽는다. */
   function summaryRowHTML(left, pctText, amountText, color) {
     return (
-      '<div style="display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--g1)">' +
+      '<div style="display:flex;align-items:center;gap:0.625rem;padding:0.6875rem 0;border-bottom:1px solid var(--g1)">' +
         (color
-          ? '<span style="flex:0 0 auto;width:7px;height:7px;border-radius:50%;background:' + color + '"></span>'
+          ? '<span style="flex:0 0 auto;width:0.4375rem;height:0.4375rem;border-radius:50%;background:' + color + '"></span>'
           : "") +
-        '<span style="flex:1;min-width:0;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
+        '<span style="flex:1;min-width:0;font-size:0.84375rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
           esc(left) + "</span>" +
-        (pctText ? '<span style="flex:0 0 auto;font-size:11px;color:var(--g3)">' + esc(pctText) + "</span>" : "") +
-        '<span style="flex:0 0 auto;font-size:14px;font-weight:600;letter-spacing:-.02em">' + esc(amountText) + "</span>" +
+        (pctText ? '<span style="flex:0 0 auto;font-size:0.6875rem;color:var(--g3)">' + esc(pctText) + "</span>" : "") +
+        '<span style="flex:0 0 auto;font-size:0.875rem;font-weight:600;letter-spacing:-.02em">' + esc(amountText) + "</span>" +
       "</div>"
     );
   }
@@ -837,7 +859,7 @@
    */
   function donutStyle(view, shares, spent) {
     var base =
-      "position:relative;width:196px;height:196px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:";
+      "position:relative;width:12.25rem;height:12.25rem;border-radius:50%;display:flex;align-items:center;justify-content:center;background:";
     var denom = Math.max(view.totalAmount, spent);
     if (!denom || !shares.length) return base + "var(--g1)";
 
@@ -912,7 +934,7 @@
 
     css(
       "gauge",
-      "height:10px;border-radius:5px;width:" + s.spentPct.toFixed(2) + "%;background:" +
+      "height:0.625rem;border-radius:0.3125rem;width:" + s.spentPct.toFixed(2) + "%;background:" +
         (s.overToday ? STRIPES : "var(--fg)") + ";transition:width .3s ease"
     );
 
@@ -986,8 +1008,8 @@
         .map(function (c) {
           return (
             '<button data-act="pickCat" data-id="' + esc(c.id) + '" style="' + catButtonStyle(d.categoryId === c.id) + '">' +
-              '<div style="font-size:21px;line-height:1.1">' + esc(c.emoji) + "</div>" +
-              '<div style="font-size:9.5px;font-weight:600;line-height:1.15;text-align:center;word-break:keep-all">' + esc(c.name) + "</div>" +
+              '<div style="font-size:1.3125rem;line-height:1.1">' + esc(c.emoji) + "</div>" +
+              '<div style="font-size:0.59375rem;font-weight:600;line-height:1.15;text-align:center;word-break:keep-all">' + esc(c.name) + "</div>" +
             "</button>"
           );
         })
@@ -999,7 +1021,7 @@
       KEYPAD.map(function (k) {
         return (
           '<button data-act="key" data-key="' + esc(k) +
-          '" style="height:clamp(34px,6.6dvh,58px);border:none;background:none;font-size:24px;font-weight:600;border-radius:12px">' +
+          '" style="height:clamp(2.125rem,6.6dvh,3.625rem);border:none;background:none;font-size:1.5rem;font-weight:600;border-radius:0.75rem">' +
           esc(k) + "</button>"
         );
       }).join("")
@@ -1009,10 +1031,11 @@
     var saveBtn = el("save");
     saveBtn.disabled = !canSave;
     saveBtn.style.cssText =
-      "flex:1;height:clamp(44px,7dvh,56px);border:none;border-radius:14px;font-size:17px;font-weight:700;background:" +
+      "flex:1;height:clamp(2.75rem,7dvh,3.5rem);border:none;border-radius:0.875rem;font-size:1.0625rem;font-weight:700;background:" +
       (canSave ? "var(--fg)" : "var(--g1)") + ";color:" + (canSave ? "var(--bg)" : "var(--g3)");
 
-    var base = Math.min(50, Math.max(30, window.innerHeight * 0.06)); // clamp(30px,6dvh,50px)
+    // 원래 뜻은 clamp(30px, 6dvh, 50px). 화면 높이를 기준 화면 단위로 바꿔서 잰다.
+    var base = Math.min(50, Math.max(30, (window.innerHeight / scale()) * 0.06));
     fit(el("draftAmountText"), el("draftAmountWon"), base, 5);
   }
 
@@ -1031,7 +1054,7 @@
     var btn = el("createBudget");
     btn.disabled = !ok;
     btn.style.cssText =
-      "margin-top:16px;width:100%;height:52px;border:none;border-radius:13px;font-size:16px;font-weight:700;background:" +
+      "margin-top:1rem;width:100%;height:3.25rem;border:none;border-radius:0.8125rem;font-size:1rem;font-weight:700;background:" +
       (ok ? "var(--fg)" : "var(--g1)") + ";color:" + (ok ? "var(--bg)" : "var(--g3)");
   }
 
@@ -1047,16 +1070,16 @@
             st.status === "ended" ? "종료" : "대기";
           var mine = isOwner(b);
           return (
-            '<div style="display:flex;align-items:center;gap:12px;padding:13px 0;border-top:1px solid var(--g1)">' +
+            '<div style="display:flex;align-items:center;gap:0.75rem;padding:0.8125rem 0;border-top:1px solid var(--g1)">' +
               '<button data-act="activateBudget" data-id="' + esc(b.id) + '" style="flex:1;min-width:0;text-align:left;border:none;background:none;padding:0">' +
-                '<div style="font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
+                '<div style="font-size:0.875rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
                   esc((b.shared ? "👥 " : "") + b.name) + "</div>" +
-                '<div style="font-size:11px;color:var(--g3);margin-top:3px">' +
+                '<div style="font-size:0.6875rem;color:var(--g3);margin-top:0.1875rem">' +
                   esc(calc.periodLabel(b) + " · " + calc.formatWon(st.spent) + " / " + calc.formatWon(b.totalAmount)) + "원</div>" +
               "</button>" +
-              '<div style="font-size:11px;color:var(--g3);flex:0 0 auto">' + state + "</div>" +
+              '<div style="font-size:0.6875rem;color:var(--g3);flex:0 0 auto">' + state + "</div>" +
               '<button data-act="' + (mine ? "removeBudget" : "leaveBudgetFromList") + '" data-id="' + esc(b.id) +
-                '" style="border:none;background:none;padding:0 2px;font-size:12px;color:var(--g3);flex:0 0 auto">' +
+                '" style="border:none;background:none;padding:0 2px;font-size:0.75rem;color:var(--g3);flex:0 0 auto">' +
                 (mine ? "삭제" : "나가기") + "</button>" +
             "</div>"
           );
@@ -1074,12 +1097,12 @@
       data.categories
         .map(function (c) {
           return (
-            '<div data-cat="' + esc(c.id) + '" style="display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--g1)">' +
-              '<input data-catfield="emoji" data-id="' + esc(c.id) + '" maxlength="4" style="width:40px;flex:0 0 auto;border:none;font-size:19px;text-align:center;outline:none" />' +
-              '<input data-catfield="name" data-id="' + esc(c.id) + '" maxlength="20" style="flex:1;min-width:0;border:none;font-size:14px;font-weight:600;outline:none" />' +
-              '<button data-act="catUp" data-id="' + esc(c.id) + '" style="width:30px;height:30px;flex:0 0 auto;border:1px solid var(--g2);border-radius:8px;background:none;font-size:11px">↑</button>' +
-              '<button data-act="catDown" data-id="' + esc(c.id) + '" style="width:30px;height:30px;flex:0 0 auto;border:1px solid var(--g2);border-radius:8px;background:none;font-size:11px">↓</button>' +
-              '<button data-act="catRemove" data-id="' + esc(c.id) + '" style="width:30px;height:30px;flex:0 0 auto;border:none;background:none;font-size:12px;color:var(--g3)">✕</button>' +
+            '<div data-cat="' + esc(c.id) + '" style="display:flex;align-items:center;gap:0.625rem;padding:0.5625rem 0;border-top:1px solid var(--g1)">' +
+              '<input data-catfield="emoji" data-id="' + esc(c.id) + '" maxlength="4" style="width:2.5rem;flex:0 0 auto;border:none;font-size:1.1875rem;text-align:center;outline:none" />' +
+              '<input data-catfield="name" data-id="' + esc(c.id) + '" maxlength="20" style="flex:1;min-width:0;border:none;font-size:0.875rem;font-weight:600;outline:none" />' +
+              '<button data-act="catUp" data-id="' + esc(c.id) + '" style="width:1.875rem;height:1.875rem;flex:0 0 auto;border:1px solid var(--g2);border-radius:0.5rem;background:none;font-size:0.6875rem">↑</button>' +
+              '<button data-act="catDown" data-id="' + esc(c.id) + '" style="width:1.875rem;height:1.875rem;flex:0 0 auto;border:1px solid var(--g2);border-radius:0.5rem;background:none;font-size:0.6875rem">↓</button>' +
+              '<button data-act="catRemove" data-id="' + esc(c.id) + '" style="width:1.875rem;height:1.875rem;flex:0 0 auto;border:none;background:none;font-size:0.75rem;color:var(--g3)">✕</button>' +
             "</div>"
           );
         })
@@ -1097,7 +1120,7 @@
     var addBtn = el("addCat");
     addBtn.disabled = !canAdd;
     addBtn.style.cssText =
-      "width:56px;flex:0 0 auto;border:none;border-radius:10px;font-size:14px;font-weight:700;background:" +
+      "width:3.5rem;flex:0 0 auto;border:none;border-radius:0.625rem;font-size:0.875rem;font-weight:700;background:" +
       (canAdd ? "var(--fg)" : "var(--g1)") + ";color:" + (canAdd ? "var(--bg)" : "var(--g3)");
   }
 
@@ -1142,11 +1165,11 @@
           if (u === b.ownerUid) tags.push("만든 사람");
           if (u === me().uid) tags.push("나");
           return (
-            '<div style="display:flex;align-items:center;gap:10px;padding:11px 0;border-top:1px solid var(--g1)">' +
-              '<div style="flex:1;min-width:0;font-size:13.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(name) + "</div>" +
-              (tags.length ? '<div style="font-size:11px;color:var(--g3);flex:0 0 auto">' + esc(tags.join(" · ")) + "</div>" : "") +
+            '<div style="display:flex;align-items:center;gap:0.625rem;padding:0.6875rem 0;border-top:1px solid var(--g1)">' +
+              '<div style="flex:1;min-width:0;font-size:0.84375rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(name) + "</div>" +
+              (tags.length ? '<div style="font-size:0.6875rem;color:var(--g3);flex:0 0 auto">' + esc(tags.join(" · ")) + "</div>" : "") +
               (owner && u !== me().uid
-                ? '<button data-act="kickMember" data-id="' + esc(u) + '" style="border:none;background:none;padding:0 2px;font-size:12px;color:var(--g3);flex:0 0 auto">내보내기</button>'
+                ? '<button data-act="kickMember" data-id="' + esc(u) + '" style="border:none;background:none;padding:0 2px;font-size:0.75rem;color:var(--g3);flex:0 0 auto">내보내기</button>'
                 : "") +
             "</div>"
           );
@@ -2248,6 +2271,7 @@
 
   /* 화면 크기가 바뀌면 큰 숫자 맞춤을 다시 계산 */
   window.addEventListener("resize", function () {
+    scaleCache = null; // 화면이 바뀌었으니 배율을 다시 잰다
     render();
   });
 

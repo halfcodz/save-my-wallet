@@ -690,7 +690,7 @@ async function wait(ms) {
     el("shares").textContent.includes("숙박") && el("shares").textContent.includes("90,000"));
   ok("요약 줄에 비율 막대는 없다 (색점과 숫자로 읽는다)",
     !/width:\d+(\.\d+)?%/.test(el("shares").innerHTML), el("shares").innerHTML.slice(0, 200));
-  ok("색점은 7px 원", el("shares").innerHTML.includes("width:7px;height:7px;border-radius:50%"));
+  ok("색점은 원형", el("shares").innerHTML.includes("width:0.4375rem;height:0.4375rem;border-radius:50%"));
 
   /* --- 9. 내역 탭 --- */
   click('[data-act="goHistory"]');
@@ -803,6 +803,31 @@ async function wait(ms) {
   eq("참여자 이름이 예산에 기록된다", fake.docs.get(budgetPath).members.uid_2.name, "하늘");
   eq("남은 금액이 같이 보인다", txt("remainingText"), "280,000");
   ok("상대가 쓴 내역이 보인다", el("todayList").textContent.includes("예은"));
+
+  /* --- 14. 화면 크기 대응 --- */
+  const css = fs.readFileSync(path.join(ROOT, "css/app.css"), "utf8");
+  ok("루트 글자 크기로 배율을 잡는다", /html\s*\{[^}]*font-size:\s*clamp\(/.test(css), css.slice(0, 200));
+  ok("기준 폭 390(=16px)으로 나눈다", css.includes("24.375"));
+  ok("프레임 폭(430)을 넘어서는 커지지 않는다", css.includes("min(100vw, 430px)"));
+  ok("낮은 화면에서는 높이도 본다", css.includes("100dvh / 44"));
+  ok("min()을 모르는 브라우저용 기본값이 있다", /font-size:\s*16px;/.test(css));
+
+  // 주석은 설명이라 px 이라고 적혀 있어도 상관없다
+  const stripComments = (t) => t.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  const hasRawPx = (text) =>
+    (stripComments(text).match(/(?<![\w.-])(\d+(?:\.\d+)?)px/g) || []).filter((v) => {
+      const n = parseFloat(v);
+      return n >= 3 && n !== 430 && n !== 999 && n !== 9999;
+    });
+  eq("index.html 에 남은 고정 px 없음", hasRawPx(html).length, 0);
+  eq("app.js 에 남은 고정 px 없음",
+    hasRawPx(fs.readFileSync(path.join(ROOT, "js/app.js"), "utf8")).length, 0);
+  eq("app.css 에 남은 고정 px 없음",
+    hasRawPx(css.replace(/font-size:[^;]+;/g, "")).length, 0);
+
+  // 배율을 못 재는 환경(스타일시트 미적용)에서도 1로 떨어져야 한다
+  ok("큰 금액에 px 글자 크기가 실제로 적용된다", /\d+px$/.test(el("remainingText").style.fontSize),
+    el("remainingText").style.fontSize);
 
   report();
 
