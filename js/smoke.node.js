@@ -463,7 +463,7 @@ async function wait(ms) {
   eq("다시 넣은 금액", txt("remainingText"), "370,000");
 
   /* --- 5.5 예산 고르기 시트 --- */
-  eq("메인에 예산 이름과 기간이 보인다", txt("homeBudgetName"), "부산 여행 · 8/20–8/23");
+  eq("상단에 지금 예산 이름이 보인다", txt("homeBudgetName"), "부산 여행");
 
   click('[data-act="openSwitcher"]');
   await tick(4);
@@ -510,7 +510,7 @@ async function wait(ms) {
   await tick(2);
   click('[data-act="createBudget"]');
   await tick(10);
-  eq("새 예산으로 바뀐다", txt("homeBudgetName"), "생활비 · 8/1–8/31");
+  eq("새 예산으로 바뀐다", txt("homeBudgetName"), "생활비");
 
   click('[data-act="openSwitcher"]');
   await tick(4);
@@ -519,7 +519,7 @@ async function wait(ms) {
   const busanRow = [...rows].find((r) => r.textContent.includes("부산 여행"));
   click(busanRow);
   await tick(10);
-  eq("한 번 눌러 예산이 바뀐다", txt("homeBudgetName"), "부산 여행 · 8/20–8/23");
+  eq("한 번 눌러 예산이 바뀐다", txt("homeBudgetName"), "부산 여행");
   ok("고르면 시트가 닫힌다", !visible("switcherOpen"));
   eq("바뀐 예산의 금액이 보인다", txt("remainingText"), "370,000");
 
@@ -555,7 +555,7 @@ async function wait(ms) {
 
   ok("설정을 묻지 않고 바로 시작한다", !visible("personalOpen"));
   ok("나의 가계부로 들어온다", visible("hasBudget"));
-  ok("메인에 나의 가계부와 이번 달이 보인다", txt("homeBudgetName").indexOf("나의 가계부 · ") === 0, txt("homeBudgetName"));
+  eq("상단이 나의 가계부로 바뀐다", txt("homeBudgetName"), "나의 가계부");
   const personalPath = [...fake.docs.keys()].find(
     (k) => k.startsWith("budgets/") && k.split("/").length === 2 && fake.docs.get(k).kind === "personal"
   );
@@ -611,7 +611,7 @@ async function wait(ms) {
     .find((r) => r.textContent.includes("부산 여행"));
   click(backRow);
   await tick(10);
-  eq("여행 예산으로 돌아온다", txt("homeBudgetName"), "부산 여행 · 8/20–8/23");
+  eq("여행 예산으로 돌아온다", txt("homeBudgetName"), "부산 여행");
 
   /* --- 6. 초대 코드 --- */
   click('[data-act="openShare"]');
@@ -687,7 +687,10 @@ async function wait(ms) {
   const sharesHTML = el("shares").innerHTML;
   ok("목록에도 같은 색 점이 붙는다", sharesHTML.includes("var(--c1)") && sharesHTML.includes("var(--c2)"));
   ok("색만이 아니라 이름과 금액도 적혀 있다",
-    el("shares").textContent.includes("숙박") && el("shares").textContent.includes("원"));
+    el("shares").textContent.includes("숙박") && el("shares").textContent.includes("90,000"));
+  ok("요약 줄에 비율 막대는 없다 (색점과 숫자로 읽는다)",
+    !/width:\d+(\.\d+)?%/.test(el("shares").innerHTML), el("shares").innerHTML.slice(0, 200));
+  ok("색점은 7px 원", el("shares").innerHTML.includes("width:7px;height:7px;border-radius:50%"));
 
   /* --- 9. 내역 탭 --- */
   click('[data-act="goHistory"]');

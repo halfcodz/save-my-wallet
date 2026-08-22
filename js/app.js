@@ -166,10 +166,9 @@
   function tabStyle(name) {
     var on = ui.tab === name;
     return (
-      "border:none;background:none;min-height:46px;padding:10px 2px 12px;font-size:17px;letter-spacing:-.02em;font-weight:" +
-      (on ? "800" : "500") +
-      ";color:" + (on ? "var(--fg)" : "var(--g3)") +
-      ";border-bottom:2px solid " + (on ? "var(--fg)" : "transparent")
+      "border:none;background:none;padding:4px 0;font-size:13.5px;font-weight:" +
+      (on ? "700" : "400") +
+      ";color:" + (on ? "var(--fg)" : "var(--g3)")
     );
   }
 
@@ -249,19 +248,22 @@
     );
   }
 
+  /* 홈의 오늘 줄. 한 줄에 무엇에 · 누가 · 얼마 — 메모는 이름 뒤에 이어 붙인다. */
   function expenseRowHTML(e, budget) {
     var c = calc.resolveCategory(e, data.categories);
+    var title = c.emoji + " " + c.name + (e.memo ? " · " + e.memo : "");
+    var who = "";
+    if (budget && budget.shared) {
+      who = e.uid && e.uid === me().uid ? "나" : calc.memberName(budget, e.uid, e.userName);
+    }
     return (
-      '<div data-act="editExpense" data-id="' + esc(e.id) + '" style="display:flex;align-items:center;gap:12px;padding:13px 0;border-top:1px solid var(--g1);cursor:pointer">' +
-        '<div style="font-size:20px;width:26px;text-align:center">' + esc(c.emoji) + "</div>" +
-        '<div style="flex:1;min-width:0">' +
-          '<div style="font-size:14px;font-weight:600">' + esc(c.name) + writerTag(e, budget) + "</div>" +
-          (e.memo
-            ? '<div style="font-size:12px;color:var(--g3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(e.memo) + "</div>"
-            : "") +
-        "</div>" +
-        '<div style="font-size:16px;font-weight:700;letter-spacing:-.02em">' + esc(calc.formatWon(e.amount)) + "</div>" +
-      "</div>"
+      '<button data-act="editExpense" data-id="' + esc(e.id) +
+        '" style="display:flex;align-items:baseline;gap:12px;width:100%;border:none;background:none;padding:14px 0;text-align:left;border-bottom:1px solid var(--g1)">' +
+        '<span style="flex:1;min-width:0;font-size:14.5px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
+          esc(title) + "</span>" +
+        (who ? '<span style="flex:0 0 auto;font-size:11px;color:var(--g3)">' + esc(who) + "</span>" : "") +
+        '<span style="flex:0 0 auto;font-size:15px;font-weight:600;letter-spacing:-.02em">' + esc(calc.formatWon(e.amount)) + "</span>" +
+      "</button>"
     );
   }
 
@@ -781,20 +783,27 @@
     }
   }
 
-  function barHTML(pct) {
-    return (
-      '<div style="height:8px;border-radius:4px;background:var(--g1);overflow:hidden">' +
-        '<div style="height:100%;width:' + pct.toFixed(2) + '%;background:var(--fg)"></div>' +
-      "</div>"
-    );
-  }
-
   /* 카테고리 색은 슬롯 순서대로만 준다. 여덟 번째부터는 새 색을 만들지 않고
      하나로 묶는다 (색이 많아질수록 서로 구별이 안 되기 때문). */
   var COLOR_SLOTS = 7;
 
   function categoryColor(rank) {
     return rank < COLOR_SLOTS ? "var(--c" + (rank + 1) + ")" : "var(--c-other)";
+  }
+
+  /* 요약의 한 줄. 색점이 도넛 조각과 짝을 이루고, 막대 없이 숫자로 읽는다. */
+  function summaryRowHTML(left, pctText, amountText, color) {
+    return (
+      '<div style="display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--g1)">' +
+        (color
+          ? '<span style="flex:0 0 auto;width:7px;height:7px;border-radius:50%;background:' + color + '"></span>'
+          : "") +
+        '<span style="flex:1;min-width:0;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
+          esc(left) + "</span>" +
+        (pctText ? '<span style="flex:0 0 auto;font-size:11px;color:var(--g3)">' + esc(pctText) + "</span>" : "") +
+        '<span style="flex:0 0 auto;font-size:14px;font-weight:600;letter-spacing:-.02em">' + esc(amountText) + "</span>" +
+      "</div>"
+    );
   }
 
   function renderSummary(view, list, spent) {
@@ -809,20 +818,11 @@
       el("shares"),
       shares
         .map(function (sh, i) {
-          var color = categoryColor(i);
-          return (
-            '<div style="padding-bottom:16px">' +
-              '<div style="display:flex;align-items:center;gap:8px;padding-bottom:6px">' +
-                '<div style="flex:0 0 auto;width:9px;height:9px;border-radius:3px;background:' + color + '"></div>' +
-                '<div style="font-size:16px">' + esc(sh.emoji) + "</div>" +
-                '<div style="flex:1;min-width:0;font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(sh.name) + "</div>" +
-                '<div style="font-size:12px;color:var(--g3)">' + sh.pct.toFixed(0) + "%</div>" +
-                '<div style="font-size:13px;font-weight:700;min-width:66px;text-align:right">' + esc(calc.formatWon(sh.amount)) + "원</div>" +
-              "</div>" +
-              '<div style="height:8px;border-radius:4px;background:var(--g1);overflow:hidden">' +
-                '<div style="height:100%;width:' + sh.pct.toFixed(2) + '%;background:' + color + '"></div>' +
-              "</div>" +
-            "</div>"
+          return summaryRowHTML(
+            sh.name,
+            sh.pct.toFixed(0) + "%",
+            calc.formatWon(sh.amount),
+            categoryColor(i)
           );
         })
         .join("")
@@ -875,25 +875,8 @@
       el("memberShares"),
       shares
         .map(function (s) {
-          var mine = s.uid === me().uid;
-          var diff = s.amount - per;
-          var note =
-            diff > 0 ? "+" + calc.formatWon(diff) + "원 더 냄"
-            : diff < 0 ? calc.formatWon(-diff) + "원 덜 냄"
-            : "딱 맞음";
-          return (
-            '<div style="padding-bottom:16px">' +
-              '<div style="display:flex;align-items:center;gap:8px;padding-bottom:6px">' +
-                '<div style="flex:1;min-width:0;font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
-                  esc(s.name) + (mine ? '<span style="font-size:11px;color:var(--g3);font-weight:600;margin-left:6px">나</span>' : "") +
-                "</div>" +
-                '<div style="font-size:12px;color:var(--g3)">' + s.pct.toFixed(0) + "%</div>" +
-                '<div style="font-size:13px;font-weight:700;min-width:66px;text-align:right">' + esc(calc.formatWon(s.amount)) + "원</div>" +
-              "</div>" +
-              barHTML(s.pct) +
-              '<div style="font-size:11px;color:var(--g3);padding-top:5px">' + esc(note) + "</div>" +
-            "</div>"
-          );
+          var label = s.uid === me().uid ? s.name + " (나)" : s.name;
+          return summaryRowHTML(label, s.pct.toFixed(0) + "%", calc.formatWon(s.amount), "");
         })
         .join("")
     );
@@ -905,14 +888,7 @@
       el("settlement"),
       moves
         .map(function (m) {
-          return (
-            '<div style="display:flex;align-items:center;gap:10px;padding:12px 0;border-top:1px solid var(--g1)">' +
-              '<div style="flex:1;min-width:0;font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
-                esc(m.fromName) + ' <span style="color:var(--g3)">→</span> ' + esc(m.toName) +
-              "</div>" +
-              '<div style="font-size:14px;font-weight:700;flex:0 0 auto">' + esc(calc.formatWon(m.amount)) + "원</div>" +
-            "</div>"
-          );
+          return summaryRowHTML(m.fromName + " → " + m.toName, "", calc.formatWon(m.amount), "");
         })
         .join("")
     );
@@ -921,7 +897,7 @@
   function renderHome(active) {
     var s = calc.computeBudgetStats(active, data.expenses, today);
 
-    text("homeBudgetName", active.name + " · " + budgetPeriodText(active));
+    text("homeBudgetName", active.name);
     show("isSharedHome", !!active.shared);
     text("memberLine", calc.memberNames(active, me().uid) + "과 함께 쓰는 중");
 
@@ -936,7 +912,7 @@
 
     css(
       "gauge",
-      "height:100%;width:" + s.spentPct.toFixed(2) + "%;background:" +
+      "height:10px;border-radius:5px;width:" + s.spentPct.toFixed(2) + "%;background:" +
         (s.overToday ? STRIPES : "var(--fg)") + ";transition:width .3s ease"
     );
 
@@ -966,7 +942,7 @@
       return e.date === pickDate;
     });
 
-    text("todayListTitle", pickDate === today ? "오늘 내역" : calc.dayLabel(pickDate, today) + " 내역");
+    text("todayListTitle", pickDate === today ? "오늘" : calc.dayLabel(pickDate, today));
     show("todayEmpty", picked.length === 0);
     html(
       el("todayList"),

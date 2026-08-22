@@ -123,33 +123,26 @@
   <!-- ===== 예산 있음 ===== -->
   <div data-show="hasBudget" style="flex:1;min-height:0;display:flex;flex-direction:column">
 
-    <div style="display:flex;align-items:center;gap:20px;padding:18px 20px 0">
-      <div style="flex:1;display:flex;gap:20px">
-        <button data-act="goHome" data-el="tabHome">메인</button>
-        <button data-act="goHistory" data-el="tabHistory">내역</button>
-        <button data-act="goSummary" data-el="tabSummary">요약</button>
-      </div>
-      <button data-act="openMenu" style="border:none;background:none;padding:6px 0 12px;font-size:18px;color:var(--g3);letter-spacing:.08em">⋯</button>
+    <div style="flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:16px 24px 14px">
+      <button data-act="openSwitcher" style="display:flex;align-items:baseline;gap:7px;min-width:0;border:none;background:none;padding:0;text-align:left">
+        <span data-el="homeBudgetName" style="min-width:0;font-size:15px;font-weight:600;letter-spacing:-.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+        <span style="flex:0 0 auto;font-size:8px;color:var(--g3)">▼</span>
+      </button>
+      <div style="flex:1"></div>
+      <button data-act="openMenu" style="flex:0 0 auto;border:none;background:none;padding:6px 0;font-size:17px;color:var(--g3);letter-spacing:.1em">⋯</button>
     </div>
-    <div style="height:1px;background:var(--g2);margin-top:-1px"></div>
 
-    <div data-el="scroller" style="flex:1;min-height:0;overflow-y:auto;padding-bottom:120px">
+    <div style="flex:0 0 auto;display:flex;gap:18px;padding:0 24px 12px">
+      <button data-act="goHome" data-el="tabHome">홈</button>
+      <button data-act="goHistory" data-el="tabHistory">내역</button>
+      <button data-act="goSummary" data-el="tabSummary">요약</button>
+    </div>
+
+    <div data-el="scroller" style="flex:1;min-height:0;overflow-y:auto;padding-bottom:132px">
 
       <!-- ----- 메인 ----- -->
       <div data-show="isHome">
-        <div style="padding:12px 20px 22px">
-          <!-- 지금 보고 있는 예산. 눌러서 바꾸거나 새로 만든다. -->
-          <div style="padding-bottom:18px">
-            <button data-act="openSwitcher" style="display:flex;align-items:center;gap:8px;max-width:100%;border:1px solid var(--g2);border-radius:999px;background:none;padding:8px 13px 8px 15px;text-align:left">
-              <span data-el="homeBudgetName" style="min-width:0;font-size:14px;font-weight:700;letter-spacing:-.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
-              <span style="flex:0 0 auto;font-size:9px;color:var(--g3);line-height:1">▼</span>
-            </button>
-            <!-- 누구와 함께 쓰는지. 누르면 멤버 관리로 간다. -->
-            <button data-show="isSharedHome" data-act="openShare" style="display:flex;align-items:center;gap:6px;max-width:100%;border:none;background:none;padding:9px 2px 0;text-align:left">
-              <span style="flex:0 0 auto;font-size:11px;line-height:1">👥</span>
-              <span data-el="memberLine" style="min-width:0;font-size:11.5px;font-weight:600;color:var(--g3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
-            </button>
-          </div>
+        <div style="padding:14px 24px 0">
           <div data-el="mainLabel" style="font-size:12px;color:var(--g3);letter-spacing:.04em">남은 금액</div>
           <div data-el="remainingRow" style="display:flex;align-items:baseline;gap:4px;margin-top:2px">
             <div data-el="remainingText" class="mm-fit" style="font-size:56px;font-weight:800;letter-spacing:-.045em;line-height:1.05">0</div>
@@ -184,15 +177,23 @@
               </div>
             </div>
           </div>
-          <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-top:8px">
+          <div style="display:flex;align-items:baseline;gap:12px;margin-top:8px">
             <button data-show="isPersonalHome" data-act="openPersonal" style="border:none;background:none;padding:0;font-size:11px;color:var(--g3);text-decoration:underline">기간·한도 설정</button>
             <div data-el="daysLeftText" style="flex:1;font-size:11px;color:var(--g3);text-align:right"></div>
           </div>
+
+          <!-- 누구와 함께 쓰는지. 누르면 멤버 관리로 간다. -->
+          <button data-show="isSharedHome" data-act="openShare" style="display:flex;align-items:center;gap:7px;max-width:100%;border:none;background:none;padding:14px 0 0;text-align:left">
+            <span style="flex:0 0 auto;font-size:11px;line-height:1">👥</span>
+            <span data-el="memberLine" style="min-width:0;font-size:11.5px;color:var(--g3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+          </button>
         </div>
 
-        <div style="padding:0 20px">
-          <div data-el="todayListTitle" style="font-size:13px;font-weight:700;padding-bottom:10px">오늘 내역</div>
-          <div data-show="todayEmpty" style="padding:26px 0;text-align:center;font-size:13px;color:var(--g3)">아직 없습니다</div>
+        <div style="height:1px;background:var(--g2);margin:28px 0 0"></div>
+
+        <div style="padding:20px 24px 0">
+          <div data-el="todayListTitle" style="font-size:12px;color:var(--g3);letter-spacing:.03em">오늘</div>
+          <div data-show="todayEmpty" style="padding:26px 0;font-size:13px;color:var(--g3)">아직 없습니다</div>
           <div data-el="todayList"></div>
         </div>
       </div>
@@ -233,38 +234,36 @@
       </div>
 
       <!-- ----- 요약 ----- -->
-      <div data-show="isSummary" style="padding:10px 0 0">
-        <div style="padding:0 20px">
-          <div style="display:flex;flex-direction:column;align-items:center;padding:6px 0 24px">
-            <div data-el="donut" style="position:relative;width:196px;height:196px;border-radius:50%;display:flex;align-items:center;justify-content:center">
-              <div style="width:150px;height:150px;border-radius:50%;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px">
-                <div style="font-size:11px;color:var(--g3)">사용</div>
-                <div data-el="usedPctText" style="font-size:40px;font-weight:800;letter-spacing:-.04em;line-height:1">0%</div>
-                <div style="font-size:12px;color:var(--g3)"><span data-el="viewSpentText2">0</span>원</div>
+      <div data-show="isSummary">
+        <div style="padding:14px 24px 0">
+          <div style="display:flex;flex-direction:column;align-items:center;padding-bottom:30px">
+            <div data-el="donut" style="width:168px;height:168px;border-radius:50%;display:grid;place-items:center">
+              <div style="width:126px;height:126px;border-radius:50%;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center">
+                <div data-el="usedPctText" style="font-size:34px;font-weight:700;letter-spacing:-.04em;line-height:1">0%</div>
+                <div style="font-size:11px;color:var(--g3);margin-top:4px"><span data-el="viewSpentText2">0</span>원 사용</div>
               </div>
             </div>
-            <div style="font-size:12px;color:var(--g3);padding-top:14px"><span data-el="viewPeriodText2"></span> · 예산 <span data-el="viewTotalText">0</span>원</div>
+            <div style="font-size:11.5px;color:var(--g3);padding-top:16px"><span data-el="viewPeriodText2"></span> · 예산 <span data-el="viewTotalText">0</span>원</div>
           </div>
+
           <div data-show="viewEmpty" style="padding:40px 0;text-align:center;font-size:13px;color:var(--g3)">내역이 없습니다</div>
+
+          <div data-show="hasShares" style="font-size:12px;color:var(--g3);padding-bottom:4px">카테고리별</div>
+          <div data-el="shares"></div>
 
           <!-- 함께 쓰는 예산일 때만: 사람별 지출과 정산 -->
           <div data-show="isSharedSummary">
-            <div style="display:flex;align-items:baseline;justify-content:space-between;padding:2px 0 12px">
-              <div style="font-size:13px;font-weight:700">사람별</div>
+            <div style="display:flex;align-items:baseline;justify-content:space-between;padding:24px 0 4px">
+              <div style="font-size:12px;color:var(--g3)">사람별</div>
               <div style="font-size:11px;color:var(--g3)">1인당 <span data-el="perPersonText">0</span>원</div>
             </div>
             <div data-el="memberShares"></div>
-            <div data-show="hasSettlement" style="padding-top:6px">
-              <div style="font-size:13px;font-weight:700;padding:10px 0 4px">정산</div>
-              <div style="font-size:11px;color:var(--g3);padding-bottom:10px">똑같이 나눠 내려면 이렇게 주고받으면 됩니다</div>
+            <div data-show="hasSettlement">
+              <div style="font-size:12px;color:var(--g3);padding:24px 0 4px">정산</div>
               <div data-el="settlement"></div>
             </div>
-            <div data-show="settledUp" style="padding:10px 0 18px;font-size:12px;color:var(--g3)">지금은 딱 맞아서 주고받을 게 없습니다.</div>
-            <div style="height:1px;background:var(--g1);margin:18px 0"></div>
+            <div data-show="settledUp" style="font-size:12px;color:var(--g3);padding:6px 0 0">지금은 딱 맞아서 주고받을 게 없습니다.</div>
           </div>
-
-          <div data-show="hasShares" style="font-size:13px;font-weight:700;padding:2px 0 12px">카테고리별</div>
-          <div data-el="shares"></div>
         </div>
       </div>
 
@@ -274,9 +273,7 @@
   <!-- ===== 입력 버튼 ===== -->
   <div data-show="isHome" data-el="fabWrap">
     <div style="position:absolute;left:0;right:0;bottom:0;height:118px;pointer-events:none;background:linear-gradient(to top, var(--bg) 0, var(--bg) 62%, transparent 100%)"></div>
-    <button data-act="openAdd" style="position:absolute;bottom:26px;left:50%;transform:translateX(-50%);width:72px;height:72px;padding:0;border-radius:36px;border:none;background:var(--fg);color:var(--bg);box-shadow:0 4px 16px rgba(0,0,0,.18);display:grid;place-items:center">
-      <svg width="22" height="22" viewBox="0 0 26 26" aria-hidden="true" style="display:block"><path d="M13 3.5 V22.5 M3.5 13 H22.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"></path></svg>
-    </button>
+    <button data-act="openAdd" aria-label="지출 입력" style="position:absolute;bottom:28px;left:50%;transform:translateX(-50%);width:64px;height:64px;padding:0;border-radius:32px;border:none;background:var(--fg);color:var(--bg);font-size:26px;font-weight:400;line-height:1;box-shadow:0 4px 16px rgba(0,0,0,.18)">＋</button>
   </div>
 
   <!-- ===== 스낵바 ===== -->
