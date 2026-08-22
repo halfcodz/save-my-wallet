@@ -384,6 +384,21 @@
     </div>
   </div>
 
+  <!-- ===== 확인창 (브라우저 기본 창 대신) ===== -->
+  <div data-show="dialogOpen" style="position:absolute;inset:0;z-index:95;background:rgba(0,0,0,.36);display:flex;align-items:center;justify-content:center;padding:1.5rem">
+    <div data-el="dialogCard" style="width:100%;max-width:20rem;background:var(--bg);border-radius:1.125rem;padding:1.5rem 1.375rem 1.25rem;animation:mmUp .18s ease-out">
+      <div data-el="dialogTitle" style="font-size:1rem;font-weight:700;letter-spacing:-.01em;line-height:1.45"></div>
+      <div data-show="dialogHasBody" data-el="dialogBody" style="font-size:0.8125rem;color:var(--g3);line-height:1.7;padding-top:0.5rem;white-space:pre-line"></div>
+      <div data-show="dialogHasInput" style="padding-top:1.125rem">
+        <input data-el="dialogValue" autocomplete="off" style="width:100%;border:none;border-bottom:1px solid var(--g2);padding:0.5rem 0;font-size:0.9375rem;outline:none" />
+      </div>
+      <div style="display:flex;gap:0.5rem;padding-top:1.5rem">
+        <button data-show="dialogHasCancel" data-act="dialogCancel" data-el="dialogCancel" style="flex:1;height:2.875rem;border:1px solid var(--g2);border-radius:0.875rem;background:none;font-size:0.9375rem;font-weight:600;color:var(--g3)">취소</button>
+        <button data-act="dialogOk" data-el="dialogOk" style="flex:1;height:2.875rem;border:none;border-radius:0.875rem;background:var(--fg);color:var(--bg);font-size:0.9375rem;font-weight:700">확인</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ===== 메뉴 ===== -->
   <div data-show="menuOpen" data-act="closeMenu" style="position:absolute;inset:0;z-index:85;background:rgba(0,0,0,.28);display:flex;flex-direction:column;justify-content:flex-end">
     <div data-el="menuSheet" style="background:var(--bg);border-top-left-radius:1.125rem;border-top-right-radius:1.125rem;padding:0.5rem 0.5rem max(1.125rem,env(safe-area-inset-bottom));max-height:82%;overflow-y:auto;animation:mmUp .18s ease-out">

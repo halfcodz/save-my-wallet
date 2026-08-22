@@ -256,9 +256,11 @@ async function wait(ms) {
   const win = dom.window;
   const doc = win.document;
 
-  win.confirm = () => true;
-  win.alert = () => {};
-  win.prompt = () => "새이름";
+  // 브라우저 기본 창을 부르면 바로 잡히도록 덫을 놓는다
+  const nativeCalls = [];
+  win.confirm = (m) => { nativeCalls.push("confirm: " + m); return true; };
+  win.alert = (m) => { nativeCalls.push("alert: " + m); };
+  win.prompt = (m) => { nativeCalls.push("prompt: " + m); return "새이름"; };
 
   const fake = makeFake();
   win.firebase = fake.firebase;
@@ -302,6 +304,11 @@ async function wait(ms) {
   };
   // blur 는 버블링하지 않지만, document 의 캡처 리스너에는 잡힌다
   const blur = (name) => el(name).dispatchEvent(new win.Event("blur"));
+  const dialogOpen = () => visible("dialogOpen");
+  const acceptDialog = async () => {
+    click('[data-act="dialogOk"]');
+    await tick(8);
+  };
   const errorText = () => (visible("authError") ? txt("authErrorText") : "");
 
   await tick();
@@ -772,7 +779,22 @@ async function wait(ms) {
   click('[data-act="openMenu"]');
   await tick(2);
   click('[data-act="signOut"]');
-  await tick(12);
+  await tick(5);
+  ok("로그아웃은 앱 확인창으로 묻는다", dialogOpen());
+  eq("확인창 제목", txt("dialogTitle"), "로그아웃할까요?");
+  eq("확인 버튼 문구도 상황에 맞게", txt("dialogOk"), "로그아웃");
+  ok("취소 버튼이 있다", visible("dialogHasCancel"));
+  ok("입력칸은 없다", !visible("dialogHasInput"));
+
+  // 취소하면 아무 일도 없어야 한다
+  click('[data-act="dialogCancel"]');
+  await tick(6);
+  ok("취소하면 확인창만 닫힌다", !dialogOpen() && !visible("authForm"));
+
+  click('[data-act="signOut"]');
+  await tick(5);
+  await acceptDialog();
+  await tick(10);
   ok("로그아웃하면 로그인 화면으로 돌아온다", visible("authForm"));
   ok("가계부 본문은 감춰진다", !visible("hasBudget"));
 
@@ -788,7 +810,9 @@ async function wait(ms) {
   click('[data-act="openMenu"]');
   await tick(2);
   click('[data-act="signOut"]');
-  await tick(10);
+  await tick(5);
+  await acceptDialog();
+  await tick(8);
   click('[data-act="authModeSignup"]');
   await tick(2);
   type("authName", "하늘");
@@ -837,6 +861,29 @@ async function wait(ms) {
   // 배율을 못 재는 환경(스타일시트 미적용)에서도 1로 떨어져야 한다
   ok("큰 금액에 px 글자 크기가 실제로 적용된다", /\d+px$/.test(el("remainingText").style.fontSize),
     el("remainingText").style.fontSize);
+
+  /* --- 15. 앱 확인창 --- */
+  click('[data-act="openMenu"]');
+  await tick(3);
+  click('[data-act="renameMe"]');
+  await tick(4);
+  ok("이름 바꾸기도 앱 확인창", dialogOpen());
+  eq("제목", txt("dialogTitle"), "이름 바꾸기");
+  ok("입력칸이 있다", visible("dialogHasInput"));
+  eq("지금 이름이 미리 채워져 있다", el("dialogValue").value, "하늘");
+  eq("이름 길이 제한", el("dialogValue").getAttribute("maxlength"), "20");
+
+  el("dialogValue").value = "하늘이";
+  await acceptDialog();
+  ok("확인창이 닫힌다", !dialogOpen());
+  eq("계정 이름이 바뀐다", fake.docs.get("users/uid_2").displayName, "하늘이");
+
+  eq("브라우저 기본 창은 한 번도 쓰지 않는다", nativeCalls.length, 0, nativeCalls.join(" | "));
+
+  const appJs = fs.readFileSync(path.join(ROOT, "js/app.js"), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  ok("코드에도 confirm/alert/prompt 호출이 없다",
+    !/(^|[^.\w])(confirm|alert|prompt)\s*\(/.test(appJs));
 
   report();
 

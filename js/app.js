@@ -31,6 +31,7 @@
     historyView: "list",   // "list" | "calendar"
     calMonth: today,        // 달력이 보고 있는 달
     dayOpen: null,          // 팝업으로 연 날짜
+    dialog: null,           // 앱 안에서 뜨는 확인창
 
     snack: null,
     snackTimer: null,
@@ -162,6 +163,78 @@
 
   function isOwner(b) {
     return !!b && b.ownerUid === me().uid;
+  }
+
+  /* ---------- 확인창 ---------- */
+
+  /**
+   * 앱 안에서 뜨는 확인창. 브라우저 기본 창(confirm/prompt/alert) 대신 쓴다.
+   * 기본 창은 우리 테마도 글꼴도 따르지 않아서 앱 밖으로 튀어나온 것처럼 보인다.
+   *
+   * opts: { title, body, ok, cancel, input, value, placeholder, maxlength }
+   *   cancel 을 null 로 주면 알림창(확인 하나)이 된다.
+   * onOk(value) — 확인을 눌렀을 때. onCancel — 취소했을 때(필요한 경우만).
+   */
+  function ask(opts, onOk, onCancel) {
+    ui.dialog = {
+      title: opts.title || "",
+      body: opts.body || "",
+      ok: opts.ok || "확인",
+      cancel: opts.cancel === null ? null : opts.cancel || "취소",
+      input: !!opts.input,
+      value: opts.value || "",
+      placeholder: opts.placeholder || "",
+      maxlength: opts.maxlength || 60,
+      onOk: onOk || null,
+      onCancel: onCancel || null
+    };
+    hideSnack();
+    render();
+
+    if (!ui.dialog.input) return;
+    // 시트가 떠오른 뒤에 커서를 옮긴다
+    setTimeout(function () {
+      var node = el("dialogValue");
+      if (!node) return;
+      try {
+        node.focus();
+        node.select();
+      } catch (e) {}
+    }, 60);
+  }
+
+  /** 알려 주기만 하고 고를 것이 없을 때 */
+  function tell(title, body) {
+    ask({ title: title, body: body, cancel: null });
+  }
+
+  function closeDialog() {
+    var d = ui.dialog;
+    ui.dialog = null;
+    render();
+    if (d && d.onCancel) d.onCancel();
+  }
+
+  function renderDialog() {
+    var d = ui.dialog;
+    if (!d) return;
+    text("dialogTitle", d.title);
+    text("dialogBody", d.body);
+    show("dialogHasBody", !!d.body);
+    show("dialogHasInput", d.input);
+    show("dialogHasCancel", !!d.cancel);
+
+    var okBtn = el("dialogOk");
+    if (okBtn) okBtn.textContent = d.ok;
+    var cancelBtn = el("dialogCancel");
+    if (cancelBtn && d.cancel) cancelBtn.textContent = d.cancel;
+
+    var input = el("dialogValue");
+    if (input) {
+      input.setAttribute("maxlength", String(d.maxlength));
+      input.setAttribute("placeholder", d.placeholder);
+      value(input, d.value);
+    }
   }
 
   /* ---------- 스낵바 ---------- */
@@ -319,6 +392,7 @@
     show("switcherOpen", ui.switcherOpen);
     show("personalOpen", ui.personalOpen);
     show("dayOpen", !!ui.dayOpen);
+    show("dialogOpen", !!ui.dialog);
     show("listMode", ui.historyView === "list");
     show("calMode", ui.historyView === "calendar");
     show("snackOpen", !!ui.snack);
@@ -338,7 +412,10 @@
 
     if (needsSetup) renderSetup(st);
     if (st.status === "signed-out") renderAuth();
-    if (!ready) return;
+    if (!ready) {
+      renderDialog();
+      return;
+    }
 
     text("helloName", me().name ? me().name + "님" : "가계부");
     text("accountName", me().name || "이름 없음");
@@ -354,6 +431,7 @@
     renderSwitcher();
     renderPersonal();
     renderDaySheet();
+    renderDialog();
   }
 
   /** 화면에 보이는 기간. 나의 가계부는 이번 달. */
@@ -1413,6 +1491,18 @@
   /* ---------- 이벤트 ---------- */
 
   var ACTIONS = {
+    /* --- 확인창 --- */
+    dialogCancel: closeDialog,
+    dialogOk: function () {
+      var d = ui.dialog;
+      if (!d) return;
+      var input = el("dialogValue");
+      var typed = d.input && input ? input.value || "" : "";
+      ui.dialog = null;
+      render();
+      if (d.onOk) d.onOk(typed);
+    },
+
     /* --- 인증 --- */
     authModeLogin: function () {
       ui.auth.mode = "login";
@@ -1487,31 +1577,39 @@
       );
     },
     signOut: function () {
-      if (!confirm("로그아웃할까요?\n\n기록은 계정에 저장돼 있어서 다시 로그인하면 그대로 보입니다.")) return;
-      ui.menuOpen = false;
-      render();
-      auth.signOut().catch(function (err) {
-        snack(auth.messageOf(err), null);
-        render();
-      });
-    },
-    renameMe: function () {
-      var next = prompt("함께 쓸 때 보이는 이름", me().name || "");
-      if (next == null) return;
-      if (!next.trim()) return;
-      auth.rename(next).then(
-        function (user) {
-          store.syncMyName(user.name);
-          snack("이름을 바꿨습니다", null);
-          render();
+      ask(
+        {
+          title: "로그아웃할까요?",
+          body: "기록은 계정에 저장돼 있어서 다시 로그인하면 그대로 보입니다.",
+          ok: "로그아웃"
         },
-        function (err) {
-          snack(auth.messageOf(err), null);
+        function () {
+          ui.menuOpen = false;
           render();
+          auth.signOut().catch(function (err) {
+            snack(auth.messageOf(err), null);
+            render();
+          });
         }
       );
     },
-
+    renameMe: function () {
+      ask(
+        {
+          title: "이름 바꾸기",
+          body: "함께 쓸 때 다른 사람에게 이 이름이 보입니다.",
+          input: true,
+          value: me().name || "",
+          placeholder: "이름",
+          maxlength: model.MAX_NAME,
+          ok: "저장"
+        },
+        function (next) {
+          if (!next.trim()) return;
+          renameTo(next);
+        }
+      );
+    },
     /* --- 지출 --- */
     openAdd: openAdd,
     closeAdd: closeAdd,
@@ -1744,13 +1842,18 @@
         return;
       }
       var warn = view.shared
-        ? "\n\n함께 쓰는 예산입니다. 다른 사람이 적은 내역도 함께 지워집니다."
+        ? "\n함께 쓰는 예산이라 다른 사람이 적은 내역도 함께 지워집니다."
         : "";
-      if (!confirm('"' + view.name + '" 예산의 지출 ' + ids.length + "건을 모두 지웁니다." + warn + "\n\n계속할까요?")) {
-        render();
-        return;
-      }
-      removeMany(ids, ids.length + "건 삭제됨");
+      ask(
+        {
+          title: "내역을 모두 지울까요?",
+          body: '"' + view.name + '"에 적은 지출 ' + ids.length + "건이 사라집니다." + warn,
+          ok: "모두 삭제"
+        },
+        function () {
+          removeMany(ids, ids.length + "건 삭제됨");
+        }
+      );
     },
 
     /* --- 예산 --- */
@@ -1772,13 +1875,17 @@
       }
       var n = data.expenses.filter(function (e) { return e.budgetId === id; }).length;
       var others = b.memberUids.length - 1;
-      var msg = '"' + b.name + '" 예산을 지웁니다.\n' +
-        (n > 0 ? "이 예산에 기록한 지출 " + n + "건도 함께 삭제됩니다.\n" : "") +
-        (others > 0 ? "함께 쓰는 " + others + "명의 화면에서도 사라집니다.\n" : "") +
-        "\n되돌릴 수 없습니다. 계속할까요?";
-      if (!confirm(msg)) return;
-      store.removeBudget(id);
-      render();
+      var lines = [];
+      if (n > 0) lines.push("여기 적은 지출 " + n + "건도 함께 사라집니다.");
+      if (others > 0) lines.push("함께 쓰는 " + others + "명의 화면에서도 없어집니다.");
+      lines.push("되돌릴 수 없습니다.");
+      ask(
+        { title: '"' + b.name + '" 예산을 지울까요?', body: lines.join("\n"), ok: "삭제" },
+        function () {
+          store.removeBudget(id);
+          render();
+        }
+      );
     },
     leaveBudgetFromList: function (node) {
       leaveBudget(node.getAttribute("data-id"));
@@ -1798,31 +1905,49 @@
     createInvite: function () {
       var b = shareTarget();
       if (!b) return;
-      if (b.inviteCode && !confirm("코드를 새로 만들면 지금 코드는 바로 못 쓰게 됩니다.\n계속할까요?")) return;
-      ui.share.error = "";
-      shareBusy(true);
-      store.shareBudget(b.id).then(
-        function () {
-          ui.share.busy = false;
-          snack("초대 코드를 만들었습니다", null);
-          render();
+      var go = function () {
+        ui.share.error = "";
+        shareBusy(true);
+        store.shareBudget(b.id).then(
+          function () {
+            ui.share.busy = false;
+            snack("초대 코드를 만들었습니다", null);
+            render();
+          },
+          shareFail
+        );
+      };
+      if (!b.inviteCode) return go();
+      ask(
+        {
+          title: "코드를 새로 만들까요?",
+          body: "지금 코드는 바로 못 쓰게 됩니다. 이미 들어와 있는 사람은 그대로 함께 씁니다.",
+          ok: "새로 만들기"
         },
-        shareFail
+        go
       );
     },
     stopInvites: function () {
       var b = shareTarget();
       if (!b) return;
-      if (!confirm("초대 코드를 끕니다.\n이미 들어와 있는 사람은 그대로 함께 씁니다.\n\n계속할까요?")) return;
-      ui.share.error = "";
-      shareBusy(true);
-      store.stopInvites(b.id).then(
-        function () {
-          ui.share.busy = false;
-          snack("초대를 껐습니다", null);
-          render();
+      ask(
+        {
+          title: "초대를 끌까요?",
+          body: "새로 들어올 수 없게 됩니다. 이미 들어와 있는 사람은 그대로 함께 씁니다.",
+          ok: "초대 끄기"
         },
-        shareFail
+        function () {
+          ui.share.error = "";
+          shareBusy(true);
+          store.stopInvites(b.id).then(
+            function () {
+              ui.share.busy = false;
+              snack("초대를 껐습니다", null);
+              render();
+            },
+            shareFail
+          );
+        }
       );
     },
     copyInvite: function () {
@@ -1886,16 +2011,24 @@
       var uid = node.getAttribute("data-id");
       if (!b) return;
       var name = calc.memberName(b, uid, "");
-      if (!confirm('"' + name + '"님을 내보냅니다.\n적어 둔 내역은 그대로 남습니다.\n\n계속할까요?')) return;
-      ui.share.error = "";
-      shareBusy(true);
-      store.removeMember(b.id, uid).then(
-        function () {
-          ui.share.busy = false;
-          snack("내보냈습니다", null);
-          render();
+      ask(
+        {
+          title: '"' + name + '"님을 내보낼까요?',
+          body: "적어 둔 내역은 그대로 남습니다.",
+          ok: "내보내기"
         },
-        shareFail
+        function () {
+          ui.share.error = "";
+          shareBusy(true);
+          store.removeMember(b.id, uid).then(
+            function () {
+              ui.share.busy = false;
+              snack("내보냈습니다", null);
+              render();
+            },
+            shareFail
+          );
+        }
       );
     },
 
@@ -1921,16 +2054,23 @@
       var c = calc.findCategory(data.categories, id);
       if (!c) return;
       if (data.categories.length <= 1) {
-        alert("카테고리는 최소 하나는 있어야 합니다.");
+        tell("카테고리는 하나는 있어야 합니다", "마지막 하나는 지울 수 없습니다.");
         return;
       }
       var n = model.categoryUsageCount(data, id);
-      var msg = '"' + c.name + '" 카테고리를 지웁니다.\n' +
-        (n > 0 ? "이 카테고리로 기록한 지출 " + n + "건은 그대로 남고, 이름도 계속 보입니다.\n" : "") +
-        "\n계속할까요?";
-      if (!confirm(msg)) return;
-      store.removeCategory(id);
-      render();
+      ask(
+        {
+          title: '"' + c.name + '" 카테고리를 지울까요?',
+          body: n > 0
+            ? "이 카테고리로 적은 지출 " + n + "건은 그대로 남고, 이름도 계속 보입니다."
+            : "",
+          ok: "삭제"
+        },
+        function () {
+          store.removeCategory(id);
+          render();
+        }
+      );
     },
 
     toggleTheme: function () {
@@ -1979,11 +2119,34 @@
       render();
       return;
     }
-    if (!confirm('"' + b.name + '" 가계부에서 나갑니다.\n내가 적은 내역은 남습니다.\n\n계속할까요?')) return;
-    store.leaveBudget(id).then(
+    ask(
+      {
+        title: '"' + b.name + '"에서 나갈까요?',
+        body: "내가 적은 내역은 남습니다. 다시 들어오려면 초대 코드가 필요합니다.",
+        ok: "나가기"
+      },
       function () {
-        ui.shareOpen = false;
-        snack("나왔습니다", null);
+        store.leaveBudget(id).then(
+          function () {
+            ui.shareOpen = false;
+            snack("나왔습니다", null);
+            render();
+          },
+          function (err) {
+            snack(auth.messageOf(err), null);
+            render();
+          }
+        );
+      }
+    );
+  }
+
+  /** 이름 바꾸기 — 확인창에서 받은 값을 실제로 반영한다 */
+  function renameTo(next) {
+    auth.rename(next).then(
+      function (user) {
+        store.syncMyName(user.name);
+        snack("이름을 바꿨습니다", null);
         render();
       },
       function (err) {
@@ -2048,8 +2211,20 @@
     text("authErrorText", "");
   }
 
-  /* 엔터로 로그인 */
   document.addEventListener("keydown", function (ev) {
+    /* 확인창이 떠 있으면 키는 확인창의 것이다 */
+    if (ui.dialog) {
+      if (ev.key === "Escape") {
+        ev.preventDefault();
+        closeDialog();
+      } else if (ev.key === "Enter") {
+        ev.preventDefault();
+        ACTIONS.dialogOk();
+      }
+      return;
+    }
+
+    /* 엔터로 로그인 / 참여 */
     if (ev.key !== "Enter") return;
     var name = ev.target.getAttribute && ev.target.getAttribute("data-el");
     if (name === "authEmail" || name === "authPassword" || name === "authName") {
@@ -2256,23 +2431,30 @@
     legacyAsked = true;
 
     var n = old.expenses.length;
-    var msg =
-      "이 기기에 로그인 전에 쓰던 기록이 있습니다.\n" +
-      "예산 " + old.budgets.length + "개, 지출 " + n + "건.\n\n" +
-      "지금 계정으로 옮길까요?";
-    if (!confirm(msg)) {
-      store.skipLegacy();
-      return;
-    }
-    store.importLegacy().then(
-      function (count) {
-        snack("지출 " + count + "건을 계정으로 옮겼습니다", null);
-        render();
+    ask(
+      {
+        title: "예전 기록을 옮길까요?",
+        body:
+          "로그인 전에 이 기기에서 쓰던 기록이 있습니다.\n예산 " +
+          old.budgets.length + "개, 지출 " + n + "건.",
+        ok: "옮기기",
+        cancel: "그냥 두기"
       },
-      function (err) {
-        legacyAsked = false; // 실패하면 다음에 다시 물어본다
-        snack(auth.messageOf(err), null);
-        render();
+      function () {
+        store.importLegacy().then(
+          function (count) {
+            snack("지출 " + count + "건을 계정으로 옮겼습니다", null);
+            render();
+          },
+          function (err) {
+            legacyAsked = false; // 실패하면 다음에 다시 물어본다
+            snack(auth.messageOf(err), null);
+            render();
+          }
+        );
+      },
+      function () {
+        store.skipLegacy(); // "그냥 두기"를 골랐으면 다시 묻지 않는다
       }
     );
   }
@@ -2329,7 +2511,7 @@
     },
     canPull: function () {
       if (ui.addOpen || ui.menuOpen || ui.budgetOpen || ui.catsOpen || ui.shareOpen) return false;
-      if (ui.switcherOpen || ui.personalOpen || ui.dayOpen) return false;
+      if (ui.switcherOpen || ui.personalOpen || ui.dayOpen || ui.dialog) return false;
       if (ui.selMode || ui.swipedId) return false;
       var s = auth.state().status;
       return s === "signed-in" || s === "signed-out";
