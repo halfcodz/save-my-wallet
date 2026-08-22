@@ -11,24 +11,107 @@
 <link rel="manifest" href="manifest.json">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<!-- black-translucent: 상태바(다이나믹 아일랜드) 자리까지 화면이 올라온다.
+     그 자리 배경은 아래 프레임의 var(--bg)가 칠하므로 테마를 그대로 따라간다. -->
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="가계부">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png">
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <link rel="stylesheet" href="css/app.css">
+<script>
+  /* 첫 페인트 전에 테마를 정한다 — 상태바까지 한 색으로 뜨게 */
+  (function () {
+    try {
+      var t = localStorage.getItem("moneyplan.theme") === "dark" ? "dark" : "light";
+      document.documentElement.dataset.mm = t;
+      var m = document.querySelector('meta[name="theme-color"]');
+      if (m) m.setAttribute("content", t === "dark" ? "#0a0a0a" : "#ffffff");
+    } catch (e) {}
+  })();
+</script>
 </head>
 <body>
 
 <div style="height:100dvh;display:flex;justify-content:center;background:var(--g1);overflow:hidden">
-<div style="width:100%;max-width:430px;height:100dvh;background:var(--bg);position:relative;display:flex;flex-direction:column;border-left:1px solid var(--g2);border-right:1px solid var(--g2);overflow:hidden">
+<div data-el="frame" data-safe-top style="width:100%;max-width:430px;height:100dvh;background:var(--bg);position:relative;display:flex;flex-direction:column;border-left:1px solid var(--g2);border-right:1px solid var(--g2);overflow:hidden">
 
-  <!-- ===== 예산 없음 (첫 실행) ===== -->
-  <div data-show="noBudget" style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:20px;padding:32px 24px">
+  <!-- ===== 새 버전 알림 ===== -->
+  <div data-show="updateReady" style="display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--fg);color:var(--bg);flex:0 0 auto">
+    <div style="flex:1;font-size:13px;font-weight:600">새 버전이 준비됐습니다</div>
+    <button data-act="applyUpdate" style="border:1px solid var(--bg);border-radius:8px;background:none;color:var(--bg);padding:6px 12px;font-size:12px;font-weight:700">지금 받기</button>
+  </div>
+
+  <!-- ===== 로그인 확인 중 ===== -->
+  <div data-show="authLoading" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px">
+    <div class="mm-spin"></div>
+    <div style="font-size:13px;color:var(--g3)">불러오는 중…</div>
+  </div>
+
+  <!-- ===== Firebase 설정이 안 됨 ===== -->
+  <div data-show="authSetup" style="flex:1;min-height:0;overflow-y:auto;padding:28px 24px">
+    <div style="font-size:13px;color:var(--g3);letter-spacing:.02em">준비가 한 단계 남았습니다</div>
+    <div style="font-size:22px;font-weight:700;line-height:1.4;letter-spacing:-.02em;margin-top:10px">Firebase 연결 설정</div>
+    <div data-el="setupReason" style="font-size:13px;color:var(--g3);line-height:1.7;margin-top:14px"></div>
+    <div style="border:1px solid var(--g2);border-radius:14px;padding:16px;margin-top:18px;font-size:13px;line-height:1.9">
+      <div style="font-weight:700;padding-bottom:8px">할 일</div>
+      <div>1. <a href="https://console.firebase.google.com" target="_blank" rel="noopener">Firebase 콘솔</a>에서 프로젝트 만들기 (무료)</div>
+      <div>2. Authentication → 이메일/비밀번호 켜기</div>
+      <div>3. Firestore Database 만들기</div>
+      <div>4. 웹 앱 추가 후 설정값을 <b>js/firebase-config.js</b>에 붙여넣기</div>
+      <div>5. <b>firestore.rules</b> 내용을 규칙에 붙여넣고 게시</div>
+    </div>
+    <div style="font-size:12px;color:var(--g3);line-height:1.7;margin-top:14px">자세한 순서는 저장소의 <b>README.md</b>에 그대로 적어 두었습니다. 전 과정 무료이고 카드 등록도 필요 없습니다.</div>
+  </div>
+
+  <!-- ===== 로그인 / 회원가입 ===== -->
+  <div data-show="authForm" style="flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;justify-content:center;padding:32px 24px">
     <div style="font-size:13px;color:var(--g3);letter-spacing:.02em">가계부</div>
+    <div data-el="authTitle" style="font-size:26px;font-weight:700;line-height:1.35;letter-spacing:-.02em;margin-top:8px">다시 오셨네요</div>
+
+    <div style="display:flex;gap:20px;margin-top:26px;border-bottom:1px solid var(--g2)">
+      <button data-act="authModeLogin" data-el="tabLogin">로그인</button>
+      <button data-act="authModeSignup" data-el="tabSignup">회원가입</button>
+    </div>
+
+    <div data-show="isSignup" style="padding-top:18px">
+      <div style="font-size:11px;color:var(--g3);padding-bottom:5px">이름</div>
+      <input data-el="authName" autocomplete="nickname" maxlength="20" placeholder="같이 쓸 때 보이는 이름" style="width:100%;border:none;border-bottom:1px solid var(--g2);padding:9px 0;font-size:15px;outline:none" />
+    </div>
+
+    <div style="padding-top:18px">
+      <div style="font-size:11px;color:var(--g3);padding-bottom:5px">이메일</div>
+      <input data-el="authEmail" type="email" inputmode="email" autocomplete="email" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="you@example.com" style="width:100%;border:none;border-bottom:1px solid var(--g2);padding:9px 0;font-size:15px;outline:none" />
+    </div>
+
+    <div style="padding-top:18px">
+      <div style="font-size:11px;color:var(--g3);padding-bottom:5px">비밀번호</div>
+      <input data-el="authPassword" type="password" autocomplete="current-password" placeholder="6자 이상" style="width:100%;border:none;border-bottom:1px solid var(--g2);padding:9px 0;font-size:15px;outline:none" />
+    </div>
+
+    <div data-show="authError" style="margin-top:16px;border-radius:11px;background:var(--g1);padding:12px 14px;font-size:12.5px;line-height:1.6">
+      <span data-el="authErrorText"></span>
+    </div>
+
+    <button data-act="authSubmit" data-el="authSubmit" style="margin-top:22px;width:100%;height:54px;border:none;border-radius:14px;background:var(--fg);color:var(--bg);font-size:16px;font-weight:700">로그인</button>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px">
+      <button data-act="authReset" style="border:none;background:none;padding:6px 0;font-size:12.5px;color:var(--g3);text-decoration:underline">비밀번호를 잊었어요</button>
+      <button data-act="toggleTheme" style="border:none;background:none;padding:6px 0;font-size:12.5px;color:var(--g3)"><span data-el="themeLabelAuth">다크</span> 모드</button>
+    </div>
+
+    <div style="font-size:11px;color:var(--g3);line-height:1.7;margin-top:22px">기록은 계정에 저장됩니다. 어느 기기에서 로그인해도 같은 내역이 보이고, 여행 가계부는 초대 코드로 함께 쓸 수 있습니다.</div>
+  </div>
+
+  <!-- ===== 예산 없음 (로그인 후 첫 실행) ===== -->
+  <div data-show="noBudget" style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:20px;padding:32px 24px">
+    <div style="font-size:13px;color:var(--g3);letter-spacing:.02em"><span data-el="helloName">가계부</span></div>
     <div style="font-size:26px;font-weight:700;line-height:1.35;letter-spacing:-.02em">기간과 총액을 정하면<br />바로 시작합니다</div>
     <button data-act="openBudget" style="margin-top:8px;height:56px;border:none;border-radius:14px;background:var(--fg);color:var(--bg);font-size:17px;font-weight:700">예산 만들기</button>
+    <button data-act="openShare" style="height:52px;border:1px solid var(--g2);border-radius:14px;background:none;font-size:15px;font-weight:600">초대 코드로 여행 가계부 참여</button>
+    <button data-act="openMenu" style="border:none;background:none;padding:6px 0;font-size:13px;color:var(--g3)">설정</button>
   </div>
 
   <!-- ===== 예산 있음 ===== -->
@@ -49,7 +132,10 @@
       <!-- ----- 메인 ----- -->
       <div data-show="isHome">
         <div style="padding:12px 20px 22px">
-          <div style="font-size:12px;color:var(--g3);letter-spacing:.04em">남은 금액</div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="font-size:12px;color:var(--g3);letter-spacing:.04em">남은 금액</div>
+            <div data-show="isSharedHome" data-el="sharedBadge" style="font-size:10px;font-weight:700;color:var(--g3);border:1px solid var(--g2);border-radius:999px;padding:2px 7px"></div>
+          </div>
           <div data-el="remainingRow" style="display:flex;align-items:baseline;gap:4px;margin-top:2px">
             <div data-el="remainingText" class="mm-fit" style="font-size:56px;font-weight:800;letter-spacing:-.045em;line-height:1.05">0</div>
             <div data-el="remainingWon" style="font-size:20px;font-weight:600;color:var(--g3)">원</div>
@@ -128,6 +214,24 @@
             <div style="font-size:12px;color:var(--g3);padding-top:14px"><span data-el="viewPeriodText2"></span> · 예산 <span data-el="viewTotalText">0</span>원</div>
           </div>
           <div data-show="viewEmpty" style="padding:40px 0;text-align:center;font-size:13px;color:var(--g3)">내역이 없습니다</div>
+
+          <!-- 함께 쓰는 예산일 때만: 사람별 지출과 정산 -->
+          <div data-show="isSharedSummary">
+            <div style="display:flex;align-items:baseline;justify-content:space-between;padding:2px 0 12px">
+              <div style="font-size:13px;font-weight:700">사람별</div>
+              <div style="font-size:11px;color:var(--g3)">1인당 <span data-el="perPersonText">0</span>원</div>
+            </div>
+            <div data-el="memberShares"></div>
+            <div data-show="hasSettlement" style="padding-top:6px">
+              <div style="font-size:13px;font-weight:700;padding:10px 0 4px">정산</div>
+              <div style="font-size:11px;color:var(--g3);padding-bottom:10px">똑같이 나눠 내려면 이렇게 주고받으면 됩니다</div>
+              <div data-el="settlement"></div>
+            </div>
+            <div data-show="settledUp" style="padding:10px 0 18px;font-size:12px;color:var(--g3)">지금은 딱 맞아서 주고받을 게 없습니다.</div>
+            <div style="height:1px;background:var(--g1);margin:18px 0"></div>
+          </div>
+
+          <div data-show="hasShares" style="font-size:13px;font-weight:700;padding:2px 0 12px">카테고리별</div>
           <div data-el="shares"></div>
         </div>
       </div>
@@ -144,13 +248,13 @@
   </div>
 
   <!-- ===== 스낵바 ===== -->
-  <div data-show="snackOpen" style="position:absolute;left:16px;right:16px;bottom:88px;height:48px;border-radius:12px;background:var(--fg);color:var(--bg);display:flex;align-items:center;justify-content:space-between;padding:0 16px;font-size:13px;z-index:60;animation:mmUp .18s ease-out">
-    <span data-el="snackText"></span>
-    <button data-act="undo" style="border:none;background:none;color:var(--bg);font-size:13px;font-weight:700;padding:6px 0">취소</button>
+  <div data-show="snackOpen" style="position:absolute;left:16px;right:16px;bottom:88px;min-height:48px;border-radius:12px;background:var(--fg);color:var(--bg);display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;font-size:13px;z-index:60;animation:mmUp .18s ease-out">
+    <span data-el="snackText" style="line-height:1.5"></span>
+    <button data-show="snackUndo" data-act="undo" style="border:none;background:none;color:var(--bg);font-size:13px;font-weight:700;padding:6px 0;flex:0 0 auto">취소</button>
   </div>
 
   <!-- ===== 지출 입력 ===== -->
-  <div data-show="addOpen" style="position:absolute;inset:0;background:var(--bg);z-index:80;display:flex;flex-direction:column;animation:mmUp .2s ease-out">
+  <div data-show="addOpen" data-safe-top style="position:absolute;inset:0;background:var(--bg);z-index:80;display:flex;flex-direction:column;animation:mmUp .2s ease-out">
     <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 20px 2px;flex:0 0 auto">
       <button data-act="closeAdd" style="border:none;background:none;padding:0;font-size:14px;color:var(--g3)">닫기</button>
       <input type="date" data-el="draftDate" style="border:1px solid var(--g2);border-radius:9px;padding:5px 9px;font-size:12px;color:var(--g3)" />
@@ -179,21 +283,34 @@
 
   <!-- ===== 메뉴 ===== -->
   <div data-show="menuOpen" data-act="closeMenu" style="position:absolute;inset:0;z-index:85;background:rgba(0,0,0,.28);display:flex;flex-direction:column;justify-content:flex-end">
-    <div data-el="menuSheet" style="background:var(--bg);border-top-left-radius:18px;border-top-right-radius:18px;padding:8px 8px 18px;animation:mmUp .18s ease-out">
+    <div data-el="menuSheet" style="background:var(--bg);border-top-left-radius:18px;border-top-right-radius:18px;padding:8px 8px max(18px,env(safe-area-inset-bottom));max-height:82%;overflow-y:auto;animation:mmUp .18s ease-out">
       <button data-act="openBudget" style="width:100%;text-align:left;border:none;background:none;padding:16px;font-size:15px;font-weight:600">예산 관리</button>
+      <button data-act="openShare" style="width:100%;text-align:left;border:none;background:none;padding:16px;font-size:15px;font-weight:600;border-top:1px solid var(--g1)">여행 가계부 함께 쓰기</button>
       <button data-act="openCats" style="width:100%;text-align:left;border:none;background:none;padding:16px;font-size:15px;font-weight:600;border-top:1px solid var(--g1)">카테고리 편집</button>
       <button data-act="toggleTheme" style="width:100%;text-align:left;border:none;background:none;padding:16px;font-size:15px;font-weight:600;border-top:1px solid var(--g1)"><span data-el="themeLabel">다크</span> 모드</button>
+      <button data-act="menuRefresh" style="width:100%;text-align:left;border:none;background:none;padding:16px;font-size:15px;font-weight:600;border-top:1px solid var(--g1)">새로고침</button>
       <button data-act="deleteAllFromMenu" style="width:100%;text-align:left;border:none;background:none;padding:16px;font-size:15px;font-weight:600;border-top:1px solid var(--g1);color:var(--g3)">내역 전체 삭제</button>
+
+      <div style="height:1px;background:var(--g2);margin:8px 16px"></div>
+      <div style="display:flex;align-items:center;gap:12px;padding:10px 16px 6px">
+        <div style="flex:1;min-width:0">
+          <div data-el="accountName" style="font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
+          <div data-el="accountEmail" style="font-size:11px;color:var(--g3);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
+        </div>
+        <button data-act="renameMe" style="border:1px solid var(--g2);border-radius:9px;background:none;padding:8px 12px;font-size:12px;font-weight:600;flex:0 0 auto">이름 변경</button>
+      </div>
+      <button data-act="signOut" style="width:100%;text-align:left;border:none;background:none;padding:14px 16px;font-size:15px;font-weight:600">로그아웃</button>
+      <button data-act="hardReset" style="width:100%;text-align:left;border:none;background:none;padding:14px 16px;font-size:12.5px;color:var(--g3)">앱 새로 받기 (캐시 비우기)</button>
     </div>
   </div>
 
   <!-- ===== 예산 ===== -->
-  <div data-show="budgetOpen" style="position:absolute;inset:0;background:var(--bg);z-index:90;display:flex;flex-direction:column;animation:mmUp .2s ease-out">
+  <div data-show="budgetOpen" data-safe-top style="position:absolute;inset:0;background:var(--bg);z-index:90;display:flex;flex-direction:column;animation:mmUp .2s ease-out">
     <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px">
       <div style="font-size:16px;font-weight:700">예산</div>
       <button data-act="closeBudget" style="border:none;background:none;padding:0;font-size:14px;color:var(--g3)">닫기</button>
     </div>
-    <div style="padding:4px 20px;overflow-y:auto;flex:1">
+    <div style="padding:4px 20px max(20px,env(safe-area-inset-bottom));overflow-y:auto;flex:1">
       <div style="border:1px solid var(--g2);border-radius:14px;padding:16px">
         <div style="font-size:12px;color:var(--g3);padding-bottom:10px">새 예산</div>
         <input data-el="nbName" placeholder="이름 (예: 부산 여행)" maxlength="30" style="width:100%;border:none;border-bottom:1px solid var(--g2);padding:8px 0;font-size:15px;font-weight:600;outline:none" />
@@ -222,28 +339,97 @@
     </div>
   </div>
 
+  <!-- ===== 함께 쓰기 ===== -->
+  <div data-show="shareOpen" data-safe-top style="position:absolute;inset:0;background:var(--bg);z-index:90;display:flex;flex-direction:column;animation:mmUp .2s ease-out">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px">
+      <div style="font-size:16px;font-weight:700">여행 가계부 함께 쓰기</div>
+      <button data-act="closeShare" style="border:none;background:none;padding:0;font-size:14px;color:var(--g3)">닫기</button>
+    </div>
+    <div style="padding:0 20px max(20px,env(safe-area-inset-bottom));overflow-y:auto;flex:1">
+
+      <!-- 내 예산 초대 -->
+      <div data-show="shareHasBudget" style="border:1px solid var(--g2);border-radius:14px;padding:16px">
+        <div style="font-size:11px;color:var(--g3)">이 예산에 친구를 부릅니다</div>
+        <div data-el="shareBudgetName" style="font-size:16px;font-weight:700;margin-top:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
+
+        <div data-show="shareNoCode" style="padding-top:14px">
+          <div style="font-size:12.5px;color:var(--g3);line-height:1.7">초대 코드를 만들어 알려주면, 같이 가는 사람이 그 코드로 들어와 함께 기록합니다. 지출은 서로 실시간으로 보입니다.</div>
+          <button data-act="createInvite" data-el="createInvite" style="margin-top:14px;width:100%;height:50px;border:none;border-radius:13px;background:var(--fg);color:var(--bg);font-size:15px;font-weight:700">초대 코드 만들기</button>
+        </div>
+
+        <div data-show="shareHasCode" style="padding-top:14px">
+          <div style="font-size:11px;color:var(--g3);padding-bottom:6px">초대 코드</div>
+          <div data-el="inviteCodeText" style="font-size:30px;font-weight:800;letter-spacing:.14em;line-height:1.2;word-break:break-all"></div>
+          <div style="display:flex;gap:8px;padding-top:14px">
+            <button data-act="shareInvite" style="flex:1;height:46px;border:none;border-radius:12px;background:var(--fg);color:var(--bg);font-size:14px;font-weight:700">코드 공유</button>
+            <button data-act="copyInvite" style="flex:1;height:46px;border:1px solid var(--g2);border-radius:12px;background:none;font-size:14px;font-weight:600">복사</button>
+          </div>
+          <div data-show="isInviteOwner" style="display:flex;gap:14px;padding-top:12px">
+            <button data-act="createInvite" style="border:none;background:none;padding:4px 0;font-size:12px;color:var(--g3);text-decoration:underline">코드 새로 만들기</button>
+            <button data-act="stopInvites" style="border:none;background:none;padding:4px 0;font-size:12px;color:var(--g3);text-decoration:underline">초대 끄기</button>
+          </div>
+        </div>
+
+        <div data-show="shareMemberNoCode" style="padding-top:14px;font-size:12.5px;color:var(--g3);line-height:1.7">
+          이 가계부는 초대가 꺼져 있습니다. 새로 부르려면 만든 사람이 초대 코드를 켜야 합니다.
+        </div>
+
+        <div style="padding-top:18px">
+          <div style="font-size:11px;color:var(--g3);padding-bottom:4px">함께 쓰는 사람</div>
+          <div data-el="memberList"></div>
+        </div>
+
+        <button data-show="canLeave" data-act="leaveBudget" style="margin-top:16px;width:100%;height:46px;border:1px solid var(--g2);border-radius:12px;background:none;font-size:14px;font-weight:600;color:var(--g3)">이 가계부에서 나가기</button>
+      </div>
+
+      <div data-show="shareNoBudget" style="border:1px solid var(--g2);border-radius:14px;padding:16px;font-size:13px;color:var(--g3);line-height:1.7">
+        먼저 예산을 만들면 그 예산에 친구를 초대할 수 있습니다.
+      </div>
+
+      <!-- 남의 여행에 참여 -->
+      <div style="border:1px solid var(--g2);border-radius:14px;padding:16px;margin-top:14px">
+        <div style="font-size:12px;color:var(--g3);padding-bottom:10px">초대 코드로 참여</div>
+        <input data-el="joinCode" maxlength="12" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="예: K7QMB4XZ" style="width:100%;border:none;border-bottom:1px solid var(--g2);padding:9px 0;font-size:20px;font-weight:700;letter-spacing:.12em;outline:none;text-transform:uppercase" />
+        <button data-act="joinByCode" data-el="joinButton" style="margin-top:14px;width:100%;height:50px;border:none;border-radius:13px;background:var(--fg);color:var(--bg);font-size:15px;font-weight:700">참여하기</button>
+      </div>
+
+      <div data-show="shareError" style="margin-top:14px;border-radius:11px;background:var(--g1);padding:12px 14px;font-size:12.5px;line-height:1.6">
+        <span data-el="shareErrorText"></span>
+      </div>
+
+      <div style="font-size:11px;color:var(--g3);line-height:1.7;padding-top:16px">초대 코드를 아는 사람만 들어올 수 있습니다. 코드가 새어 나갔다면 "코드 새로 만들기"를 누르면 이전 코드는 곧바로 못 쓰게 됩니다.</div>
+    </div>
+  </div>
+
   <!-- ===== 카테고리 ===== -->
-  <div data-show="catsOpen" style="position:absolute;inset:0;background:var(--bg);z-index:90;display:flex;flex-direction:column;animation:mmUp .2s ease-out">
+  <div data-show="catsOpen" data-safe-top style="position:absolute;inset:0;background:var(--bg);z-index:90;display:flex;flex-direction:column;animation:mmUp .2s ease-out">
     <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px">
       <div style="font-size:16px;font-weight:700">카테고리</div>
       <button data-act="closeCats" style="border:none;background:none;padding:0;font-size:14px;color:var(--g3)">닫기</button>
     </div>
-    <div style="padding:0 20px 20px;overflow-y:auto;flex:1">
+    <div style="padding:0 20px max(20px,env(safe-area-inset-bottom));overflow-y:auto;flex:1">
       <div style="display:flex;gap:8px;padding-bottom:14px">
         <input data-el="newCatEmoji" placeholder="🙂" maxlength="4" style="width:52px;border:1px solid var(--g2);border-radius:10px;padding:10px;font-size:18px;text-align:center;outline:none" />
         <input data-el="newCatName" placeholder="새 카테고리 이름" maxlength="20" style="flex:1;min-width:0;border:1px solid var(--g2);border-radius:10px;padding:10px;font-size:14px;outline:none" />
         <button data-act="addCat" data-el="addCat" style="width:56px;flex:0 0 auto;border:none;border-radius:10px;background:var(--fg);color:var(--bg);font-size:14px;font-weight:700">추가</button>
       </div>
       <div data-el="catList"></div>
-      <div style="font-size:11px;color:var(--g3);padding-top:14px;line-height:1.6">입력 화면에서는 최근·자주 쓴 순서로 자동 정렬됩니다.</div>
+      <div style="font-size:11px;color:var(--g3);padding-top:14px;line-height:1.6">입력 화면에서는 최근·자주 쓴 순서로 자동 정렬됩니다. 카테고리는 나에게만 적용되고, 함께 쓰는 사람에게는 내가 적은 이름 그대로 보입니다.</div>
     </div>
   </div>
 
 </div>
 </div>
 
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js" crossorigin="anonymous"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js" crossorigin="anonymous"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js" crossorigin="anonymous"></script>
+<script src="js/firebase-config.js"></script>
 <script src="js/calc.js"></script>
+<script src="js/model.js"></script>
+<script src="js/auth.js"></script>
 <script src="js/store.js"></script>
+<script src="js/refresh.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

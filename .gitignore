@@ -5,3 +5,8 @@
 .vscode/
 .idea/
 *.swp
+
+# 개발용 검증 도구(jsdom)만 쓰는 것. 앱 자체는 의존성이 없다.
+node_modules/
+package.json
+package-lock.json

@@ -1,15 +1,20 @@
 /* app.js — 화면 렌더링 + 이벤트.
-   디자인의 마크업/스타일 문자열을 그대로 재현하고, 값만 계산해서 꽂는다. */
+   디자인의 마크업/스타일 문자열을 그대로 재현하고, 값만 계산해서 꽂는다.
+   데이터는 store(=Firestore)가 들고 있고, 로그인 상태는 auth가 들고 있다. */
 (function () {
   "use strict";
 
   var calc = MP.calc;
+  var model = MP.model;
   var store = MP.store;
+  var auth = MP.auth;
 
   /* ---------- 상태 ---------- */
 
-  var data = store.load();
+  var data = store.get();
   var today = calc.todayISO();
+  var uiTheme = store.bootTheme();
+  var legacyAsked = false;
 
   var ui = {
     tab: "home",
@@ -20,11 +25,15 @@
     addOpen: false,
     budgetOpen: false,
     catsOpen: false,
+    shareOpen: false,
     menuOpen: false,
     snack: null,
     snackTimer: null,
+    updateReady: false,
     draft: { amount: 0, categoryId: null, memo: "", date: today, editingId: null },
-    nb: { name: "", start: today, end: calc.addDays(today, 6), total: "" }
+    nb: { name: "", start: today, end: calc.addDays(today, 6), total: "" },
+    auth: { mode: "login", email: "", password: "", name: "", error: "", busy: false },
+    share: { code: "", error: "", busy: false }
   };
 
   /* ---------- DOM 헬퍼 ---------- */
@@ -62,6 +71,13 @@
     if (node.value !== v) node.value = v;
   }
 
+  function disable(node, off, onStyle, offStyle) {
+    if (!node) return;
+    node.disabled = off;
+    var next = off ? offStyle : onStyle;
+    if (node.style.cssText !== next) node.style.cssText = next;
+  }
+
   var ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
@@ -87,6 +103,18 @@
 
   /* ---------- 데이터 조회 ---------- */
 
+  function me() {
+    return auth.user() || { uid: "", name: "", email: "" };
+  }
+
+  function signedIn() {
+    return auth.state().status === "signed-in";
+  }
+
+  function appReady() {
+    return signedIn() && store.ready();
+  }
+
   function findBudget(id) {
     for (var i = 0; i < data.budgets.length; i++) {
       if (data.budgets[i].id === id) return data.budgets[i];
@@ -98,6 +126,17 @@
     return findBudget(data.settings.activeBudgetId);
   }
 
+  function findExpense(id) {
+    for (var i = 0; i < data.expenses.length; i++) {
+      if (data.expenses[i].id === id) return data.expenses[i];
+    }
+    return null;
+  }
+
+  function isOwner(b) {
+    return !!b && b.ownerUid === me().uid;
+  }
+
   /* ---------- 스낵바 ---------- */
 
   function snack(message, undo) {
@@ -106,7 +145,7 @@
     ui.snackTimer = setTimeout(function () {
       ui.snack = null;
       render();
-    }, 3000);
+    }, 3400);
   }
 
   function hideSnack() {
@@ -125,6 +164,16 @@
       (on ? "800" : "500") +
       ";color:" + (on ? "var(--fg)" : "var(--g3)") +
       ";border-bottom:2px solid " + (on ? "var(--fg)" : "transparent")
+    );
+  }
+
+  function authTabStyle(on) {
+    return (
+      "border:none;background:none;min-height:44px;padding:10px 2px;font-size:15px;letter-spacing:-.02em;font-weight:" +
+      (on ? "800" : "500") +
+      ";color:" + (on ? "var(--fg)" : "var(--g3)") +
+      ";border-bottom:2px solid " + (on ? "var(--fg)" : "transparent") +
+      ";margin-bottom:-1px"
     );
   }
 
@@ -154,17 +203,44 @@
     );
   }
 
+  function bigButtonStyle(on, extra) {
+    return (
+      (extra || "") +
+      "width:100%;height:54px;border:none;border-radius:14px;font-size:16px;font-weight:700;background:" +
+      (on ? "var(--fg)" : "var(--g1)") + ";color:" + (on ? "var(--bg)" : "var(--g3)")
+    );
+  }
+
+  /* 시트 안의 주 버튼 (예산·공유 화면) */
+  function sheetButtonStyle(on) {
+    return (
+      "margin-top:14px;width:100%;height:50px;border:none;border-radius:13px;font-size:15px;font-weight:700;background:" +
+      (on ? "var(--fg)" : "var(--g1)") + ";color:" + (on ? "var(--bg)" : "var(--g3)")
+    );
+  }
+
   /* ---------- 렌더 ---------- */
 
   var KEYPAD = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "00", "0", "⌫"];
 
-  function expenseRowHTML(e) {
+  /** 함께 쓰는 예산에서 "누가 적었는지" 꼬리표 */
+  function writerTag(e, budget) {
+    if (!budget || !budget.shared) return "";
+    var name = calc.memberName(budget, e.uid, e.userName);
+    var mine = e.uid && e.uid === me().uid;
+    return (
+      '<span style="font-size:11px;font-weight:600;color:var(--g3);margin-left:6px">' +
+      esc(mine ? "나" : name) + "</span>"
+    );
+  }
+
+  function expenseRowHTML(e, budget) {
     var c = calc.resolveCategory(e, data.categories);
     return (
       '<div data-act="editExpense" data-id="' + esc(e.id) + '" style="display:flex;align-items:center;gap:12px;padding:13px 0;border-top:1px solid var(--g1);cursor:pointer">' +
         '<div style="font-size:20px;width:26px;text-align:center">' + esc(c.emoji) + "</div>" +
         '<div style="flex:1;min-width:0">' +
-          '<div style="font-size:14px;font-weight:600">' + esc(c.name) + "</div>" +
+          '<div style="font-size:14px;font-weight:600">' + esc(c.name) + writerTag(e, budget) + "</div>" +
           (e.memo
             ? '<div style="font-size:12px;color:var(--g3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(e.memo) + "</div>"
             : "") +
@@ -175,33 +251,55 @@
   }
 
   function render() {
-    var active = activeBudget();
+    data = store.get();
+    var st = auth.state();
+    var ready = appReady();
+    var active = ready ? activeBudget() : null;
 
-    document.documentElement.dataset.mm = data.settings.theme;
+    /* 테마: 로그인 전에도 제 색으로 (상태바 색까지 같이 간다) */
+    document.documentElement.dataset.mm = uiTheme;
     var meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute("content", data.settings.theme === "dark" ? "#0a0a0a" : "#ffffff");
+    if (meta) meta.setAttribute("content", uiTheme === "dark" ? "#0a0a0a" : "#ffffff");
 
-    show("noBudget", !active);
-    show("hasBudget", !!active);
-    show("isHome", !!active && ui.tab === "home");
-    show("isHistory", !!active && ui.tab === "history");
-    show("isSummary", !!active && ui.tab === "summary");
+    /* 어떤 화면을 보여줄지 */
+    var needsSetup = st.status === "unconfigured" || st.status === "sdk-failed";
+    show("updateReady", ui.updateReady);
+    show("authSetup", needsSetup);
+    show("authForm", st.status === "signed-out");
+    show("authLoading", st.status === "loading" || (signedIn() && !store.ready()));
+    show("noBudget", ready && !active);
+    show("hasBudget", ready && !!active);
+
+    show("isHome", ready && !!active && ui.tab === "home");
+    show("isHistory", ready && !!active && ui.tab === "history");
+    show("isSummary", ready && !!active && ui.tab === "summary");
     show("addOpen", ui.addOpen);
     show("menuOpen", ui.menuOpen);
     show("budgetOpen", ui.budgetOpen);
     show("catsOpen", ui.catsOpen);
+    show("shareOpen", ui.shareOpen);
     show("snackOpen", !!ui.snack);
+    show("snackUndo", !!(ui.snack && ui.snack.undo));
     show("editing", !!ui.draft.editingId);
 
     css("tabHome", tabStyle("home"));
     css("tabHistory", tabStyle("history"));
     css("tabSummary", tabStyle("summary"));
-    text("themeLabel", data.settings.theme === "dark" ? "라이트" : "다크");
+    text("themeLabel", uiTheme === "dark" ? "라이트" : "다크");
+    text("themeLabelAuth", uiTheme === "dark" ? "라이트" : "다크");
 
     show("selMode", ui.selMode);
     show("notSelMode", !ui.selMode);
 
     if (ui.snack) text("snackText", ui.snack.text);
+
+    if (needsSetup) renderSetup(st);
+    if (st.status === "signed-out") renderAuth();
+    if (!ready) return;
+
+    text("helloName", me().name ? me().name + "님" : "가계부");
+    text("accountName", me().name || "이름 없음");
+    text("accountEmail", me().email || "");
 
     if (active) renderHome(active);
     renderView();
@@ -209,9 +307,53 @@
     renderBudgetSheet();
     renderBudgetList();
     renderCats();
+    renderShare();
   }
 
-  /* 내역/요약이 바라보는 예산 */
+  /* ----- 로그인 전 화면 ----- */
+
+  function renderSetup(st) {
+    text(
+      "setupReason",
+      st.status === "unconfigured"
+        ? "js/firebase-config.js에 아직 프로젝트 설정을 넣지 않았습니다. 아래 순서대로 한 번만 해 두면 됩니다."
+        : "Firebase 스크립트를 불러오지 못했습니다. 인터넷 연결을 확인하고 다시 열어 주세요." +
+            (st.detail ? " (" + st.detail + ")" : "")
+    );
+  }
+
+  function renderAuth() {
+    var a = ui.auth;
+    var isSignup = a.mode === "signup";
+
+    show("isSignup", isSignup);
+    show("authError", !!a.error);
+    text("authErrorText", a.error);
+    text("authTitle", isSignup ? "가계부를 시작합니다" : "다시 오셨네요");
+
+    css("tabLogin", authTabStyle(!isSignup));
+    css("tabSignup", authTabStyle(isSignup));
+
+    value(el("authEmail"), a.email);
+    value(el("authPassword"), a.password);
+    value(el("authName"), a.name);
+
+    var pw = el("authPassword");
+    if (pw) pw.setAttribute("autocomplete", isSignup ? "new-password" : "current-password");
+
+    var canSubmit =
+      !a.busy && a.email.indexOf("@") > 0 && a.password.length >= 6 && (!isSignup || !!a.name.trim());
+    var label = a.busy ? "잠시만요…" : isSignup ? "가입하고 시작" : "로그인";
+    var btn = el("authSubmit");
+    if (btn) {
+      btn.disabled = !canSubmit;
+      btn.textContent = label;
+      btn.style.cssText = bigButtonStyle(canSubmit, "margin-top:22px;");
+    }
+  }
+
+  /* ----- 내역/요약이 바라보는 예산 ----- */
+
   function viewBudget() {
     return findBudget(ui.viewId) || activeBudget();
   }
@@ -221,7 +363,7 @@
       .map(function (b) {
         return (
           '<button data-act="selectView" data-id="' + esc(b.id) + '" style="' + chipStyle(b.id === selectedId) + '">' +
-          esc(b.name + " " + calc.periodLabel(b)) + "</button>"
+          esc((b.shared ? "👥 " : "") + b.name + " " + calc.periodLabel(b)) + "</button>"
         );
       })
       .join("");
@@ -248,12 +390,13 @@
 
     show("viewEmpty", list.length === 0);
     show("hasRows", list.length > 0);
+    show("hasShares", list.length > 0);
 
-    if (ui.tab === "history") renderGroups(list);
+    if (ui.tab === "history") renderGroups(list, view);
     else renderSummary(view, list, spent);
   }
 
-  function renderGroups(list) {
+  function renderGroups(list, view) {
     var groups = calc.groupByDate(list);
     html(
       el("groups"),
@@ -265,7 +408,11 @@
                 '<div style="font-size:12px;font-weight:700;color:var(--g3)">' + esc(calc.dayLabel(g.date, today)) + "</div>" +
                 '<div style="font-size:12px;color:var(--g3)">' + esc(calc.formatWon(g.sum)) + "원</div>" +
               "</div>" +
-              g.items.map(swipeRowHTML).join("") +
+              g.items
+                .map(function (e) {
+                  return swipeRowHTML(e, view);
+                })
+                .join("") +
             "</div>"
           );
         })
@@ -274,7 +421,7 @@
     paintRows();
   }
 
-  function swipeRowHTML(e) {
+  function swipeRowHTML(e, budget) {
     var c = calc.resolveCategory(e, data.categories);
     return (
       '<div style="position:relative;overflow:hidden;border-top:1px solid var(--g1)">' +
@@ -286,7 +433,7 @@
           (ui.selMode ? '<div data-check="' + esc(e.id) + '"></div>' : "") +
           '<div style="font-size:20px;width:26px;text-align:center">' + esc(c.emoji) + "</div>" +
           '<div style="flex:1;min-width:0">' +
-            '<div style="font-size:14px;font-weight:600">' + esc(c.name) + "</div>" +
+            '<div style="font-size:14px;font-weight:600">' + esc(c.name) + writerTag(e, budget) + "</div>" +
             (e.memo
               ? '<div style="font-size:12px;color:var(--g3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(e.memo) + "</div>"
               : "") +
@@ -315,6 +462,14 @@
     }
   }
 
+  function barHTML(pct) {
+    return (
+      '<div style="height:8px;border-radius:4px;background:var(--g1);overflow:hidden">' +
+        '<div style="height:100%;width:' + pct.toFixed(2) + '%;background:var(--fg)"></div>' +
+      "</div>"
+    );
+  }
+
   function renderSummary(view, list, spent) {
     var pct = view.totalAmount > 0 ? (spent / view.totalAmount) * 100 : 0;
     text("usedPctText", Math.round(pct) + "%");
@@ -323,6 +478,8 @@
       "position:relative;width:196px;height:196px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:conic-gradient(var(--fg) 0 " +
         Math.min(100, pct).toFixed(2) + "%, var(--g1) 0)"
     );
+
+    renderMemberSummary(view, list, spent);
 
     html(
       el("shares"),
@@ -337,9 +494,65 @@
                 '<div style="font-size:12px;color:var(--g3)">' + sh.pct.toFixed(0) + "%</div>" +
                 '<div style="font-size:13px;font-weight:700;min-width:66px;text-align:right">' + esc(calc.formatWon(sh.amount)) + "원</div>" +
               "</div>" +
-              '<div style="height:8px;border-radius:4px;background:var(--g1);overflow:hidden">' +
-                '<div style="height:100%;width:' + sh.pct.toFixed(2) + '%;background:var(--fg)"></div>' +
+              barHTML(sh.pct) +
+            "</div>"
+          );
+        })
+        .join("")
+    );
+  }
+
+  /** 함께 쓰는 예산: 사람별 지출 + 누가 누구에게 얼마를 주면 되는지 */
+  function renderMemberSummary(view, list, spent) {
+    // 아직 한 건도 없으면 0원짜리 줄만 늘어놓게 되므로 내역이 생긴 뒤에 보여준다
+    var visible = !!view.shared && list.length > 0;
+    show("isSharedSummary", visible);
+    if (!visible) return;
+
+    var shares = calc.memberShares(list, view);
+    var per = shares.length ? Math.round(spent / shares.length) : 0;
+    text("perPersonText", calc.formatWon(per));
+
+    html(
+      el("memberShares"),
+      shares
+        .map(function (s) {
+          var mine = s.uid === me().uid;
+          var diff = s.amount - per;
+          var note =
+            diff > 0 ? "+" + calc.formatWon(diff) + "원 더 냄"
+            : diff < 0 ? calc.formatWon(-diff) + "원 덜 냄"
+            : "딱 맞음";
+          return (
+            '<div style="padding-bottom:16px">' +
+              '<div style="display:flex;align-items:center;gap:8px;padding-bottom:6px">' +
+                '<div style="flex:1;min-width:0;font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
+                  esc(s.name) + (mine ? '<span style="font-size:11px;color:var(--g3);font-weight:600;margin-left:6px">나</span>' : "") +
+                "</div>" +
+                '<div style="font-size:12px;color:var(--g3)">' + s.pct.toFixed(0) + "%</div>" +
+                '<div style="font-size:13px;font-weight:700;min-width:66px;text-align:right">' + esc(calc.formatWon(s.amount)) + "원</div>" +
               "</div>" +
+              barHTML(s.pct) +
+              '<div style="font-size:11px;color:var(--g3);padding-top:5px">' + esc(note) + "</div>" +
+            "</div>"
+          );
+        })
+        .join("")
+    );
+
+    var moves = calc.settlement(shares);
+    show("hasSettlement", moves.length > 0);
+    show("settledUp", moves.length === 0 && spent > 0);
+    html(
+      el("settlement"),
+      moves
+        .map(function (m) {
+          return (
+            '<div style="display:flex;align-items:center;gap:10px;padding:12px 0;border-top:1px solid var(--g1)">' +
+              '<div style="flex:1;min-width:0;font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
+                esc(m.fromName) + ' <span style="color:var(--g3)">→</span> ' + esc(m.toName) +
+              "</div>" +
+              '<div style="font-size:14px;font-weight:700;flex:0 0 auto">' + esc(calc.formatWon(m.amount)) + "원</div>" +
             "</div>"
           );
         })
@@ -349,6 +562,9 @@
 
   function renderHome(active) {
     var s = calc.computeBudgetStats(active, data.expenses, today);
+
+    show("isSharedHome", !!active.shared);
+    text("sharedBadge", "👥 " + active.memberUids.length + "명");
 
     text("remainingText", calc.formatWon(s.remaining));
     text("spentText", calc.formatWon(s.spent));
@@ -369,7 +585,14 @@
       return e.date === today;
     });
     show("todayEmpty", todays.length === 0);
-    html(el("todayList"), todays.map(expenseRowHTML).join(""));
+    html(
+      el("todayList"),
+      todays
+        .map(function (e) {
+          return expenseRowHTML(e, active);
+        })
+        .join("")
+    );
 
     fit(el("remainingText"), el("remainingWon"), 56, 4);
     fit(el("perDayText"), el("perDayWon"), 24, 3);
@@ -462,15 +685,19 @@
           var state =
             b.id === data.settings.activeBudgetId ? "사용 중" :
             st.status === "ended" ? "종료" : "대기";
+          var mine = isOwner(b);
           return (
             '<div style="display:flex;align-items:center;gap:12px;padding:13px 0;border-top:1px solid var(--g1)">' +
               '<button data-act="activateBudget" data-id="' + esc(b.id) + '" style="flex:1;min-width:0;text-align:left;border:none;background:none;padding:0">' +
-                '<div style="font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(b.name) + "</div>" +
+                '<div style="font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
+                  esc((b.shared ? "👥 " : "") + b.name) + "</div>" +
                 '<div style="font-size:11px;color:var(--g3);margin-top:3px">' +
                   esc(calc.periodLabel(b) + " · " + calc.formatWon(st.spent) + " / " + calc.formatWon(b.totalAmount)) + "원</div>" +
               "</button>" +
               '<div style="font-size:11px;color:var(--g3);flex:0 0 auto">' + state + "</div>" +
-              '<button data-act="removeBudget" data-id="' + esc(b.id) + '" style="border:none;background:none;padding:0 2px;font-size:12px;color:var(--g3);flex:0 0 auto">삭제</button>' +
+              '<button data-act="' + (mine ? "removeBudget" : "leaveBudgetFromList") + '" data-id="' + esc(b.id) +
+                '" style="border:none;background:none;padding:0 2px;font-size:12px;color:var(--g3);flex:0 0 auto">' +
+                (mine ? "삭제" : "나가기") + "</button>" +
             "</div>"
           );
         })
@@ -514,18 +741,80 @@
       (canAdd ? "var(--fg)" : "var(--g1)") + ";color:" + (canAdd ? "var(--bg)" : "var(--g3)");
   }
 
+  /* ----- 함께 쓰기 ----- */
+
+  function shareTarget() {
+    return viewBudget();
+  }
+
+  function renderShare() {
+    if (!ui.shareOpen) return;
+    var b = shareTarget();
+
+    show("shareHasBudget", !!b);
+    show("shareNoBudget", !b);
+    show("shareError", !!ui.share.error);
+    text("shareErrorText", ui.share.error);
+
+    value(el("joinCode"), ui.share.code);
+    var joinOk = !ui.share.busy && model.normalizeInviteCode(ui.share.code).length === model.INVITE_LENGTH;
+    disable(el("joinButton"), !joinOk, sheetButtonStyle(true), sheetButtonStyle(false));
+
+    if (!b) return;
+
+    var owner = isOwner(b);
+    text("shareBudgetName", b.name + " " + calc.periodLabel(b));
+    show("shareNoCode", owner && !b.inviteCode);
+    show("shareMemberNoCode", !owner && !b.inviteCode);
+    show("shareHasCode", !!b.inviteCode);
+    show("isInviteOwner", owner);
+    show("canLeave", !owner);
+    text("inviteCodeText", b.inviteCode || "");
+
+    disable(el("createInvite"), ui.share.busy, sheetButtonStyle(true), sheetButtonStyle(false));
+
+    html(
+      el("memberList"),
+      b.memberUids
+        .map(function (u) {
+          var name = calc.memberName(b, u, "");
+          var tags = [];
+          if (u === b.ownerUid) tags.push("만든 사람");
+          if (u === me().uid) tags.push("나");
+          return (
+            '<div style="display:flex;align-items:center;gap:10px;padding:11px 0;border-top:1px solid var(--g1)">' +
+              '<div style="flex:1;min-width:0;font-size:13.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(name) + "</div>" +
+              (tags.length ? '<div style="font-size:11px;color:var(--g3);flex:0 0 auto">' + esc(tags.join(" · ")) + "</div>" : "") +
+              (owner && u !== me().uid
+                ? '<button data-act="kickMember" data-id="' + esc(u) + '" style="border:none;background:none;padding:0 2px;font-size:12px;color:var(--g3);flex:0 0 auto">내보내기</button>'
+                : "") +
+            "</div>"
+          );
+        })
+        .join("")
+    );
+  }
+
   /* ---------- 동작 ---------- */
 
   function openAdd() {
-    ui.draft = { amount: 0, categoryId: null, memo: "", date: today, editingId: null };
+    ui.draft = { amount: 0, categoryId: null, memo: "", date: clampToBudget(today), editingId: null };
     ui.addOpen = true;
     hideSnack();
     render();
   }
 
+  /** 오늘이 예산 기간 밖이면 가장 가까운 날짜로 (기간 밖 지출은 합계에서 빠져 혼란스럽다) */
+  function clampToBudget(date) {
+    var b = activeBudget();
+    if (!b) return date;
+    if (date < b.startDate) return b.startDate;
+    if (date > b.endDate) return b.endDate;
+    return date;
+  }
+
   function editExpense(id) {
-    var e = null;
-    for (var i = 0; i < data.expenses.length; i++) if (data.expenses[i].id === id) e = data.expenses[i];
+    var e = findExpense(id);
     if (!e) return;
     ui.draft = {
       amount: e.amount,
@@ -550,18 +839,11 @@
     if (!calc.isValidAmount(d.amount) || !d.categoryId) return;
 
     if (d.editingId) {
-      var id = d.editingId;
-      data = store.update(function (draft) {
-        draft.expenses.forEach(function (e) {
-          if (e.id !== id) return;
-          e.amount = d.amount;
-          e.categoryId = d.categoryId;
-          e.memo = d.memo;
-          e.date = d.date;
-          // 살아 있는 카테고리를 다시 고르면 옛 이름 스냅샷은 지운다
-          delete e.categoryName;
-          delete e.categoryEmoji;
-        });
+      store.patchExpense(d.editingId, {
+        amount: d.amount,
+        categoryId: d.categoryId,
+        memo: d.memo,
+        date: d.date
       });
       ui.addOpen = false;
       ui.draft.editingId = null;
@@ -570,47 +852,37 @@
       return;
     }
 
+    var active = activeBudget();
+    if (!active) return;
+
     var created = {
-      id: store.uid(),
-      budgetId: data.settings.activeBudgetId,
+      budgetId: active.id,
       amount: d.amount,
       categoryId: d.categoryId,
       memo: d.memo,
       date: d.date,
       createdAt: Date.now()
     };
-    data = store.update(function (draft) {
-      draft.expenses.unshift(created);
-    });
+    var newId = store.addExpense(created);
     ui.addOpen = false;
     ui.tab = "home";
 
-    var c = calc.resolveCategory(created, data.categories);
+    var c = calc.resolveCategory({ categoryId: d.categoryId }, data.categories);
     snack(calc.formatWon(created.amount) + "원 · " + c.name + " 저장", function () {
-      data = store.update(function (draft) {
-        draft.expenses = draft.expenses.filter(function (e) {
-          return e.id !== created.id;
-        });
-      });
+      store.removeExpenses([{ id: newId, budgetId: created.budgetId }]);
     });
     render();
   }
 
   function removeExpense(id) {
-    var gone = null;
-    for (var i = 0; i < data.expenses.length; i++) if (data.expenses[i].id === id) gone = data.expenses[i];
+    var gone = findExpense(id);
     if (!gone) return;
-    data = store.update(function (draft) {
-      draft.expenses = draft.expenses.filter(function (e) {
-        return e.id !== id;
-      });
-    });
+    var copy = model.clone(gone);
+    store.removeExpenses([gone]);
     ui.addOpen = false;
     ui.draft.editingId = null;
     snack("삭제됨", function () {
-      data = store.update(function (draft) {
-        draft.expenses.unshift(gone);
-      });
+      store.restoreExpenses([copy]);
     });
     render();
   }
@@ -635,18 +907,13 @@
     var gone = data.expenses.filter(function (e) {
       return ids.indexOf(e.id) >= 0;
     });
-    data = store.update(function (draft) {
-      draft.expenses = draft.expenses.filter(function (e) {
-        return ids.indexOf(e.id) < 0;
-      });
-    });
+    var copies = model.clone(gone);
+    store.removeExpenses(gone);
     ui.selMode = false;
     ui.selected = [];
     ui.swipedId = null;
-    snack((label || ids.length + "건 삭제됨"), function () {
-      data = store.update(function (draft) {
-        draft.expenses = gone.concat(draft.expenses);
-      });
+    snack(label || ids.length + "건 삭제됨", function () {
+      store.restoreExpenses(copies);
     });
     render();
   }
@@ -657,42 +924,175 @@
     if (!calc.isISODate(ui.nb.start) || !calc.isISODate(ui.nb.end)) return;
     if (ui.nb.end < ui.nb.start) return;
 
-    var b = {
-      id: store.uid(),
+    var id = store.addBudget({
       name: (ui.nb.name || "").trim() || "예산",
       startDate: ui.nb.start,
       endDate: ui.nb.end,
-      totalAmount: total,
-      createdAt: Date.now()
-    };
-    data = store.update(function (draft) {
-      draft.budgets.unshift(b);
-      draft.settings.activeBudgetId = b.id;
+      totalAmount: total
     });
     ui.budgetOpen = false;
     ui.tab = "home";
-    ui.viewId = b.id;
+    ui.viewId = id;
     ui.nb = { name: "", start: today, end: calc.addDays(today, 6), total: "" };
     render();
   }
 
-  function moveCat(id, dir) {
-    data = store.update(function (draft) {
-      var i = -1;
-      for (var k = 0; k < draft.categories.length; k++) if (draft.categories[k].id === id) i = k;
-      var j = i + dir;
-      if (i < 0 || j < 0 || j >= draft.categories.length) return;
-      var tmp = draft.categories[i];
-      draft.categories[i] = draft.categories[j];
-      draft.categories[j] = tmp;
-      draft.categories.forEach(function (c, n) { c.order = n; });
-    });
+  /* ----- 공유 ----- */
+
+  function shareBusy(on) {
+    ui.share.busy = on;
     render();
+  }
+
+  function shareFail(err) {
+    ui.share.busy = false;
+    ui.share.error = auth.messageOf(err);
+    render();
+  }
+
+  function copyText(t) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(t);
+    }
+    // 옛 사파리 대비
+    return new Promise(function (resolve, reject) {
+      try {
+        var ta = document.createElement("textarea");
+        ta.value = t;
+        ta.setAttribute("readonly", "");
+        ta.style.cssText = "position:absolute;left:-9999px;top:0";
+        document.body.appendChild(ta);
+        ta.select();
+        var ok = document.execCommand("copy");
+        document.body.removeChild(ta);
+        ok ? resolve() : reject(new Error("복사할 수 없습니다."));
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+
+  /* ----- 새로고침 / 업데이트 ----- */
+
+  function doRefresh() {
+    var jobs = [
+      signedIn() ? store.refresh() : Promise.resolve(null),
+      MP.updater.check()
+    ];
+    return Promise.all(jobs).then(function (r) {
+      var synced = r[0];
+      if (MP.updater.hasUpdate()) {
+        ui.updateReady = true;
+        render();
+        snack("새 버전이 준비됐습니다. 위의 '지금 받기'를 눌러 주세요.", null);
+        render();
+        return;
+      }
+      if (synced === false) snack("오프라인입니다. 저장된 내용을 보여줍니다.", null);
+      else snack("최신 상태입니다", null);
+      render();
+    });
   }
 
   /* ---------- 이벤트 ---------- */
 
   var ACTIONS = {
+    /* --- 인증 --- */
+    authModeLogin: function () {
+      ui.auth.mode = "login";
+      ui.auth.error = "";
+      render();
+    },
+    authModeSignup: function () {
+      ui.auth.mode = "signup";
+      ui.auth.error = "";
+      render();
+    },
+    authSubmit: function () {
+      var a = ui.auth;
+      if (a.busy) return;
+      if (a.email.indexOf("@") <= 0) {
+        a.error = "이메일을 확인해 주세요.";
+        render();
+        return;
+      }
+      if (a.password.length < 6) {
+        a.error = "비밀번호는 6자 이상이어야 합니다.";
+        render();
+        return;
+      }
+      if (a.mode === "signup" && !a.name.trim()) {
+        a.error = "이름을 입력해 주세요. 함께 쓸 때 이 이름이 보입니다.";
+        render();
+        return;
+      }
+
+      a.busy = true;
+      a.error = "";
+      render();
+
+      var work = a.mode === "signup"
+        ? auth.signUp(a.email, a.password, a.name)
+        : auth.signIn(a.email, a.password);
+
+      work.then(
+        function () {
+          // 성공하면 onAuthStateChanged가 화면을 넘긴다
+          ui.auth = { mode: "login", email: "", password: "", name: "", error: "", busy: false };
+          render();
+        },
+        function (err) {
+          a.busy = false;
+          a.error = auth.messageOf(err);
+          render();
+        }
+      );
+    },
+    authReset: function () {
+      var a = ui.auth;
+      if (a.email.indexOf("@") <= 0) {
+        a.error = "먼저 이메일을 입력해 주세요. 그 주소로 재설정 링크를 보냅니다.";
+        render();
+        return;
+      }
+      auth.resetPassword(a.email).then(
+        function () {
+          a.error = a.email + " 로 비밀번호 재설정 메일을 보냈습니다.";
+          render();
+        },
+        function (err) {
+          a.error = auth.messageOf(err);
+          render();
+        }
+      );
+    },
+    signOut: function () {
+      if (!confirm("로그아웃할까요?\n\n기록은 계정에 저장돼 있어서 다시 로그인하면 그대로 보입니다.")) return;
+      ui.menuOpen = false;
+      render();
+      auth.signOut().catch(function (err) {
+        snack(auth.messageOf(err), null);
+        render();
+      });
+    },
+    renameMe: function () {
+      var next = prompt("함께 쓸 때 보이는 이름", me().name || "");
+      if (next == null) return;
+      if (!next.trim()) return;
+      auth.rename(next).then(
+        function (user) {
+          store.syncMyName(user.name);
+          snack("이름을 바꿨습니다", null);
+          render();
+        },
+        function (err) {
+          snack(auth.messageOf(err), null);
+          render();
+        }
+      );
+    },
+
+    /* --- 지출 --- */
     openAdd: openAdd,
     closeAdd: closeAdd,
     save: saveExpense,
@@ -716,6 +1116,11 @@
       if (fn) fn();
       render();
     },
+    removeExpense: function (node) {
+      removeExpense(node.getAttribute("data-id"));
+    },
+
+    /* --- 메뉴 --- */
     openMenu: function () {
       ui.menuOpen = true;
       render();
@@ -735,10 +1140,23 @@
       render();
     },
     createBudget: createBudget,
-    removeExpense: function (node) {
-      removeExpense(node.getAttribute("data-id"));
+    menuRefresh: function () {
+      ui.menuOpen = false;
+      render();
+      MP.pullToRefresh.trigger();
+    },
+    applyUpdate: function () {
+      if (!MP.updater.apply()) {
+        ui.updateReady = false;
+        render();
+      }
+    },
+    hardReset: function () {
+      if (!confirm("앱 파일을 모두 지우고 새로 받습니다.\n\n기록은 계정에 저장돼 있어서 사라지지 않습니다.\n계속할까요?")) return;
+      MP.updater.hardReset();
     },
 
+    /* --- 탭 --- */
     goHome: function () { ui.tab = "home"; ui.swipedId = null; ui.selMode = false; ui.selected = []; render(); },
     goHistory: function () {
       ui.tab = "history";
@@ -779,16 +1197,20 @@
         render();
         return;
       }
-      if (!confirm('"' + view.name + '" 예산의 지출 ' + ids.length + "건을 모두 지웁니다.\n\n계속할까요?")) {
+      var warn = view.shared
+        ? "\n\n함께 쓰는 예산입니다. 다른 사람이 적은 내역도 함께 지워집니다."
+        : "";
+      if (!confirm('"' + view.name + '" 예산의 지출 ' + ids.length + "건을 모두 지웁니다." + warn + "\n\n계속할까요?")) {
         render();
         return;
       }
       removeMany(ids, ids.length + "건 삭제됨");
     },
 
+    /* --- 예산 --- */
     activateBudget: function (node) {
       var id = node.getAttribute("data-id");
-      data = store.update(function (draft) { draft.settings.activeBudgetId = id; });
+      store.setActiveBudget(id);
       ui.viewId = id;
       ui.budgetOpen = false;
       ui.tab = "home";
@@ -798,46 +1220,160 @@
       var id = node.getAttribute("data-id");
       var b = findBudget(id);
       if (!b) return;
+      if (!isOwner(b)) {
+        snack("예산을 만든 사람만 지울 수 있습니다", null);
+        render();
+        return;
+      }
       var n = data.expenses.filter(function (e) { return e.budgetId === id; }).length;
+      var others = b.memberUids.length - 1;
       var msg = '"' + b.name + '" 예산을 지웁니다.\n' +
         (n > 0 ? "이 예산에 기록한 지출 " + n + "건도 함께 삭제됩니다.\n" : "") +
+        (others > 0 ? "함께 쓰는 " + others + "명의 화면에서도 사라집니다.\n" : "") +
         "\n되돌릴 수 없습니다. 계속할까요?";
       if (!confirm(msg)) return;
-      data = store.update(function (draft) {
-        draft.budgets = draft.budgets.filter(function (x) { return x.id !== id; });
-        draft.expenses = draft.expenses.filter(function (e) { return e.budgetId !== id; });
-        if (draft.settings.activeBudgetId === id) {
-          draft.settings.activeBudgetId = draft.budgets.length ? draft.budgets[0].id : null;
-        }
-      });
-      if (ui.viewId === id) ui.viewId = data.settings.activeBudgetId;
+      store.removeBudget(id);
+      if (ui.viewId === id) ui.viewId = null;
       render();
     },
+    leaveBudgetFromList: function (node) {
+      leaveBudget(node.getAttribute("data-id"));
+    },
 
+    /* --- 함께 쓰기 --- */
+    openShare: function () {
+      ui.menuOpen = false;
+      ui.shareOpen = true;
+      ui.share = { code: "", error: "", busy: false };
+      render();
+    },
+    closeShare: function () {
+      ui.shareOpen = false;
+      render();
+    },
+    createInvite: function () {
+      var b = shareTarget();
+      if (!b) return;
+      if (b.inviteCode && !confirm("코드를 새로 만들면 지금 코드는 바로 못 쓰게 됩니다.\n계속할까요?")) return;
+      ui.share.error = "";
+      shareBusy(true);
+      store.shareBudget(b.id).then(
+        function () {
+          ui.share.busy = false;
+          snack("초대 코드를 만들었습니다", null);
+          render();
+        },
+        shareFail
+      );
+    },
+    stopInvites: function () {
+      var b = shareTarget();
+      if (!b) return;
+      if (!confirm("초대 코드를 끕니다.\n이미 들어와 있는 사람은 그대로 함께 씁니다.\n\n계속할까요?")) return;
+      ui.share.error = "";
+      shareBusy(true);
+      store.stopInvites(b.id).then(
+        function () {
+          ui.share.busy = false;
+          snack("초대를 껐습니다", null);
+          render();
+        },
+        shareFail
+      );
+    },
+    copyInvite: function () {
+      var b = shareTarget();
+      if (!b || !b.inviteCode) return;
+      copyText(b.inviteCode).then(
+        function () {
+          snack("초대 코드를 복사했습니다", null);
+          render();
+        },
+        function () {
+          ui.share.error = "복사할 수 없습니다. 코드를 직접 적어 전달해 주세요.";
+          render();
+        }
+      );
+    },
+    shareInvite: function () {
+      var b = shareTarget();
+      if (!b || !b.inviteCode) return;
+      var body =
+        '"' + b.name + '" 여행 가계부에 초대합니다.\n' +
+        "가계부 앱에서 [여행 가계부 함께 쓰기] → 초대 코드에 아래를 입력하세요.\n\n" +
+        b.inviteCode;
+      if (navigator.share) {
+        navigator.share({ title: "여행 가계부 초대", text: body }).catch(function () {});
+        return;
+      }
+      copyText(body).then(
+        function () {
+          snack("초대 문구를 복사했습니다", null);
+          render();
+        },
+        function () {
+          ui.share.error = "공유할 수 없습니다. 코드를 직접 전달해 주세요.";
+          render();
+        }
+      );
+    },
+    joinByCode: function () {
+      var code = model.normalizeInviteCode(ui.share.code);
+      ui.share.error = "";
+      shareBusy(true);
+      store.joinByCode(code).then(
+        function (r) {
+          ui.share.busy = false;
+          ui.share.code = "";
+          ui.shareOpen = false;
+          ui.tab = "home";
+          ui.viewId = r.budgetId;
+          snack(r.alreadyMember ? "이미 함께 쓰고 있는 가계부입니다" : "여행 가계부에 참여했습니다", null);
+          render();
+        },
+        shareFail
+      );
+    },
+    leaveBudget: function () {
+      var b = shareTarget();
+      if (b) leaveBudget(b.id);
+    },
+    kickMember: function (node) {
+      var b = shareTarget();
+      var uid = node.getAttribute("data-id");
+      if (!b) return;
+      var name = calc.memberName(b, uid, "");
+      if (!confirm('"' + name + '"님을 내보냅니다.\n적어 둔 내역은 그대로 남습니다.\n\n계속할까요?')) return;
+      ui.share.error = "";
+      shareBusy(true);
+      store.removeMember(b.id, uid).then(
+        function () {
+          ui.share.busy = false;
+          snack("내보냈습니다", null);
+          render();
+        },
+        shareFail
+      );
+    },
+
+    /* --- 카테고리 --- */
     openCats: function () { ui.menuOpen = false; ui.catsOpen = true; render(); },
-    closeCats: function () { ui.catsOpen = false; render(); },
+    closeCats: function () { flushCategoryPatches(); ui.catsOpen = false; render(); },
     addCat: function () {
+      flushCategoryPatches();
       var nameInput = el("newCatName");
       var emojiInput = el("newCatEmoji");
       var name = (nameInput.value || "").trim();
       if (!name) return;
-      var emoji = (emojiInput.value || "").trim() || "✏️";
-      data = store.update(function (draft) {
-        draft.categories.push({
-          id: store.uid(),
-          name: name,
-          emoji: emoji,
-          order: draft.categories.length,
-          isDefault: false
-        });
-      });
+      store.addCategory({ name: name, emoji: (emojiInput.value || "").trim() || "✏️" });
       nameInput.value = "";
       emojiInput.value = "";
       render();
     },
-    catUp: function (node) { moveCat(node.getAttribute("data-id"), -1); },
-    catDown: function (node) { moveCat(node.getAttribute("data-id"), 1); },
+    catUp: function (node) { flushCategoryPatches(); store.moveCategory(node.getAttribute("data-id"), -1); render(); },
+    catDown: function (node) { flushCategoryPatches(); store.moveCategory(node.getAttribute("data-id"), 1); render(); },
     catRemove: function (node) {
+      flushCategoryPatches();
       var id = node.getAttribute("data-id");
       var c = calc.findCategory(data.categories, id);
       if (!c) return;
@@ -845,24 +1381,45 @@
         alert("카테고리는 최소 하나는 있어야 합니다.");
         return;
       }
-      var n = store.categoryUsageCount(data, id);
+      var n = model.categoryUsageCount(data, id);
       var msg = '"' + c.name + '" 카테고리를 지웁니다.\n' +
         (n > 0 ? "이 카테고리로 기록한 지출 " + n + "건은 그대로 남고, 이름도 계속 보입니다.\n" : "") +
         "\n계속할까요?";
       if (!confirm(msg)) return;
-      data = store.update(function (draft) { store.deleteCategory(draft, id); });
+      store.removeCategory(id);
       render();
     },
 
     toggleTheme: function () {
-      var next = data.settings.theme === "dark" ? "light" : "dark";
-      data = store.update(function (draft) {
-        draft.settings.theme = next;
-      });
+      uiTheme = uiTheme === "dark" ? "light" : "dark";
+      store.setTheme(uiTheme);
       ui.menuOpen = false;
       render();
     }
   };
+
+  function leaveBudget(id) {
+    var b = findBudget(id);
+    if (!b) return;
+    if (isOwner(b)) {
+      snack("만든 사람은 나갈 수 없습니다. 예산을 삭제해 주세요.", null);
+      render();
+      return;
+    }
+    if (!confirm('"' + b.name + '" 가계부에서 나갑니다.\n내가 적은 내역은 남습니다.\n\n계속할까요?')) return;
+    store.leaveBudget(id).then(
+      function () {
+        ui.shareOpen = false;
+        if (ui.viewId === id) ui.viewId = null;
+        snack("나왔습니다", null);
+        render();
+      },
+      function (err) {
+        snack(auth.messageOf(err), null);
+        render();
+      }
+    );
+  }
 
   document.addEventListener("click", function (ev) {
     var node = ev.target.closest("[data-act]");
@@ -878,6 +1435,7 @@
     var node = ev.target;
     var name = node.getAttribute && node.getAttribute("data-el");
     if (!name) return;
+
     if (name === "draftMemo") ui.draft.memo = node.value;
     else if (name === "draftDate") ui.draft.date = calc.isISODate(node.value) ? node.value : today;
     else if (name === "nbName") ui.nb.name = node.value;
@@ -888,40 +1446,107 @@
       ui.nb.total = n ? calc.formatWon(n) : "";
       node.value = ui.nb.total;
       renderBudgetSheet();
+    }
+    // 인증 입력은 다시 그리지 않는다 (포커스와 커서 위치 유지)
+    else if (name === "authEmail") { ui.auth.email = node.value.trim(); renderAuthButtonOnly(); }
+    else if (name === "authPassword") { ui.auth.password = node.value; renderAuthButtonOnly(); }
+    else if (name === "authName") { ui.auth.name = node.value; renderAuthButtonOnly(); }
+    else if (name === "joinCode") {
+      ui.share.code = model.normalizeInviteCode(node.value);
+      node.value = ui.share.code;
+      renderShare();
     } else return;
 
     if (name === "draftMemo" || name === "draftDate") renderAdd(activeBudget());
   });
 
-  /* 카테고리 이름/이모지 인라인 수정 */
+  /** 인증 화면에서 버튼 활성/비활성만 갱신 (입력은 건드리지 않는다) */
+  function renderAuthButtonOnly() {
+    var a = ui.auth;
+    var isSignup = a.mode === "signup";
+    var canSubmit =
+      !a.busy && a.email.indexOf("@") > 0 && a.password.length >= 6 && (!isSignup || !!a.name.trim());
+    var btn = el("authSubmit");
+    if (!btn) return;
+    btn.disabled = !canSubmit;
+    btn.style.cssText = bigButtonStyle(canSubmit, "margin-top:22px;");
+  }
+
+  /* 엔터로 로그인 */
+  document.addEventListener("keydown", function (ev) {
+    if (ev.key !== "Enter") return;
+    var name = ev.target.getAttribute && ev.target.getAttribute("data-el");
+    if (name === "authEmail" || name === "authPassword" || name === "authName") {
+      ev.preventDefault();
+      ACTIONS.authSubmit();
+    } else if (name === "joinCode") {
+      ev.preventDefault();
+      var btn = el("joinButton");
+      if (btn && !btn.disabled) ACTIONS.joinByCode();
+    }
+  });
+
+  /* 카테고리 이름/이모지 인라인 수정.
+     글자마다 서버에 쓰면 낭비라서, 잠깐 멈췄을 때 한 번만 보낸다. */
+  var catTimers = {};
+
+  function queueCategoryPatch(id, field, value) {
+    var key = id + ":" + field;
+    clearTimeout(catTimers[key]);
+    catTimers[key] = setTimeout(function () {
+      delete catTimers[key];
+      var patch = {};
+      patch[field] = value;
+      store.patchCategory(id, patch);
+    }, 500);
+  }
+
+  /** 화면을 떠나기 전에 밀린 수정을 바로 보낸다 */
+  function flushCategoryPatches() {
+    Object.keys(catTimers).forEach(function (key) {
+      clearTimeout(catTimers[key]);
+      delete catTimers[key];
+      var parts = key.split(":");
+      var node = document.querySelector(
+        '[data-catfield="' + parts[1] + '"][data-id="' + parts[0] + '"]'
+      );
+      if (!node) return;
+      var patch = {};
+      patch[parts[1]] = node.value;
+      store.patchCategory(parts[0], patch);
+    });
+  }
+
   document.addEventListener("input", function (ev) {
     var node = ev.target;
     if (!node.getAttribute) return;
 
     var field = node.getAttribute("data-catfield");
     if (field) {
-      var id = node.getAttribute("data-id");
-      var v = node.value;
-      data = store.update(function (draft) {
-        draft.categories.forEach(function (c) {
-          if (c.id !== id) return;
-          if (field === "name") c.name = v;
-          else c.emoji = v;
-        });
-      });
+      queueCategoryPatch(node.getAttribute("data-id"), field, node.value);
       return; // 목록을 다시 그리지 않는다 (포커스 유지)
     }
 
     if (node.getAttribute("data-el") === "newCatName") renderCats();
   });
 
-  /* 이름을 비운 채 포커스를 옮기면 원래 이름으로 되돌린다 */
+  /* 포커스를 옮기면 밀린 수정을 바로 보낸다.
+     비운 채 나갔으면 원래 값으로 되돌린다 (이름 없는 카테고리는 만들지 않는다). */
   document.addEventListener("blur", function (ev) {
     var node = ev.target;
     if (!node.getAttribute || !node.getAttribute("data-catfield")) return;
-    if ((node.value || "").trim()) return;
-    data = store.load();
-    render();
+    var id = node.getAttribute("data-id");
+    var field = node.getAttribute("data-catfield");
+
+    if (!(node.value || "").trim()) {
+      var key = id + ":" + field;
+      clearTimeout(catTimers[key]);
+      delete catTimers[key];
+      var c = calc.findCategory(data.categories, id);
+      if (c) node.value = field === "name" ? c.name : c.emoji;
+      return;
+    }
+    flushCategoryPatches();
   }, true);
 
   /* ---------- 스와이프 / 길게 눌러 선택 ---------- */
@@ -1001,14 +1626,71 @@
     enterSelWith(row.getAttribute("data-row"));
   });
 
-  /* 다른 탭에서 데이터가 바뀌면 반영 */
+  /* ---------- 구독 ---------- */
+
   store.subscribe(function (next) {
     data = next;
+    uiTheme = data.settings.theme;
     if (!findBudget(ui.viewId)) ui.viewId = data.settings.activeBudgetId;
+    render();
+    maybeOfferLegacyImport();
+  });
+
+  store.onError(function (message) {
+    snack(message, null);
     render();
   });
 
-  /* 자정이 지나면 날짜와 계산을 갱신 */
+  auth.subscribe(function (st) {
+    if (st.status === "signed-in") {
+      store.start(st.user);
+      ui.auth = { mode: "login", email: "", password: "", name: "", error: "", busy: false };
+    } else {
+      store.stop();
+      data = store.get();
+      uiTheme = data.settings.theme;
+      ui.tab = "home";
+      ui.viewId = null;
+      ui.addOpen = ui.budgetOpen = ui.catsOpen = ui.shareOpen = ui.menuOpen = false;
+      ui.selMode = false;
+      ui.selected = [];
+      legacyAsked = false;
+      hideSnack();
+    }
+    render();
+  });
+
+  /** 로그인 전에 이 기기에서 쓰던 내역이 있으면 한 번만 물어본다 */
+  function maybeOfferLegacyImport() {
+    if (legacyAsked || !appReady()) return;
+    var old = store.legacy();
+    if (!old) return;
+    legacyAsked = true;
+
+    var n = old.expenses.length;
+    var msg =
+      "이 기기에 로그인 전에 쓰던 기록이 있습니다.\n" +
+      "예산 " + old.budgets.length + "개, 지출 " + n + "건.\n\n" +
+      "지금 계정으로 옮길까요?";
+    if (!confirm(msg)) {
+      store.skipLegacy();
+      return;
+    }
+    store.importLegacy().then(
+      function (count) {
+        snack("지출 " + count + "건을 계정으로 옮겼습니다", null);
+        render();
+      },
+      function (err) {
+        legacyAsked = false; // 실패하면 다음에 다시 물어본다
+        snack(auth.messageOf(err), null);
+        render();
+      }
+    );
+  }
+
+  /* ---------- 자정 / 화면 복귀 ---------- */
+
   function checkDate() {
     var now = calc.todayISO();
     if (now === today) return;
@@ -1017,12 +1699,17 @@
     render();
   }
   setInterval(checkDate, 30000);
+
   document.addEventListener("visibilitychange", function () {
-    if (!document.hidden) {
-      data = store.load();
-      checkDate();
+    if (document.hidden) return;
+    checkDate();
+    render();
+    // 앱으로 돌아올 때마다 새 버전이 올라왔는지 조용히 확인한다
+    MP.updater.check().then(function () {
+      if (!MP.updater.hasUpdate() || ui.updateReady) return;
+      ui.updateReady = true;
       render();
-    }
+    });
   });
   window.addEventListener("focus", checkDate);
 
@@ -1031,13 +1718,33 @@
     render();
   });
 
-  ui.viewId = data.settings.activeBudgetId;
-  render();
+  /* ---------- 시작 ---------- */
 
-  /* 오프라인 지원. file://로 열었을 땐 서비스 워커를 쓸 수 없으므로 건너뛴다. */
-  if ("serviceWorker" in navigator && location.protocol.indexOf("http") === 0) {
-    window.addEventListener("load", function () {
-      navigator.serviceWorker.register("sw.js").catch(function () {});
-    });
-  }
+  render();
+  auth.init();
+
+  MP.updater.onUpdate(function (has) {
+    if (!has || ui.updateReady) return;
+    ui.updateReady = true;
+    render();
+  });
+
+  /* 오프라인 지원 + 새 버전 감지. file://로 열었을 땐 서비스 워커를 쓸 수 없으므로 건너뛴다. */
+  MP.updater.install();
+
+  /* 웹앱에는 주소창이 없다 — 위에서 아래로 당기면 새로고침 */
+  MP.pullToRefresh.install({
+    host: el("frame"),
+    scroller: function () {
+      return appReady() && activeBudget() ? el("scroller") : null;
+    },
+    canPull: function () {
+      if (ui.addOpen || ui.menuOpen || ui.budgetOpen || ui.catsOpen || ui.shareOpen) return false;
+      if (ui.selMode || ui.swipedId) return false;
+      var s = auth.state().status;
+      return s === "signed-in" || s === "signed-out";
+    },
+    onEngage: clearTouch,
+    onRefresh: doRefresh
+  });
 })();

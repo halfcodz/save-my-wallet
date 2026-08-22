@@ -1,12 +1,5 @@
-/* node js/run-tests.node.js — 브라우저 없이 계산 함수만 빠르게 검증 */
-globalThis.localStorage = (function () {
-  var m = {};
-  return {
-    getItem: function (k) { return k in m ? m[k] : null; },
-    setItem: function (k, v) { m[k] = String(v); },
-    removeItem: function (k) { delete m[k]; }
-  };
-})();
+/* node js/run-tests.node.js — 브라우저 없이 계산·데이터 함수만 빠르게 검증.
+   calc.js와 model.js는 DOM도 저장소도 건드리지 않아서 그대로 require된다. */
 
 var tests = require("./tests.js");
 var results = tests.run();

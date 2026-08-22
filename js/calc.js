@@ -254,6 +254,116 @@
       });
   }
 
+  /* ---------- 공유 예산: 사람별 집계 / 정산 ---------- */
+
+  var UNKNOWN_MEMBER = "알 수 없음";
+
+  /** 예산에 기록된 멤버 이름. 없으면 지출에 남은 이름, 그것도 없으면 '알 수 없음'. */
+  function memberName(budget, uid, fallback) {
+    var m = budget && budget.members ? budget.members[uid] : null;
+    if (m && m.name) return m.name;
+    if (fallback) return fallback;
+    return UNKNOWN_MEMBER;
+  }
+
+  /**
+   * 사람별 지출 합계 (많이 쓴 순).
+   * 아직 한 푼도 안 쓴 멤버도 0원으로 자기 줄을 갖는다 — 정산에 필요하다.
+   */
+  function memberShares(expenses, budget) {
+    var by = {};
+    var names = {};
+    var i;
+
+    for (i = 0; i < expenses.length; i++) {
+      var e = expenses[i];
+      var key = e.uid || "";
+      by[key] = (by[key] || 0) + e.amount;
+      if (!names[key] && e.userName) names[key] = e.userName;
+    }
+
+    var uids = budget && Array.isArray(budget.memberUids) ? budget.memberUids : [];
+    for (i = 0; i < uids.length; i++) {
+      if (by[uids[i]] === undefined) by[uids[i]] = 0;
+    }
+
+    var total = 0;
+    Object.keys(by).forEach(function (k) {
+      total += by[k];
+    });
+
+    return Object.keys(by)
+      .sort(function (a, b) {
+        if (by[b] !== by[a]) return by[b] - by[a];
+        return a < b ? -1 : a > b ? 1 : 0; // 금액이 같으면 uid 순 — 순서가 흔들리지 않게
+      })
+      .map(function (u) {
+        return {
+          uid: u,
+          name: memberName(budget, u, names[u]),
+          amount: by[u],
+          pct: total > 0 ? (by[u] / total) * 100 : 0
+        };
+      });
+  }
+
+  /**
+   * n빵 정산: 각자 낸 돈을 균등하게 맞추려면 누가 누구에게 얼마를 주면 되는지.
+   * 많이 받을 사람과 많이 줄 사람을 큰 것부터 짝지어서 송금 횟수를 줄인다.
+   */
+  function settlement(shares) {
+    var n = shares.length;
+    if (n < 2) return [];
+
+    var total = 0;
+    shares.forEach(function (s) {
+      total += s.amount;
+    });
+    if (total <= 0) return [];
+
+    var per = total / n;
+    var creditors = []; // 더 낸 사람 = 받을 사람
+    var debtors = [];   // 덜 낸 사람 = 줄 사람
+
+    shares.forEach(function (s) {
+      var d = s.amount - per;
+      if (d >= 0.5) creditors.push({ uid: s.uid, name: s.name, left: d });
+      else if (d <= -0.5) debtors.push({ uid: s.uid, name: s.name, left: -d });
+    });
+
+    function bigFirst(a, b) {
+      if (b.left !== a.left) return b.left - a.left;
+      return a.uid < b.uid ? -1 : a.uid > b.uid ? 1 : 0;
+    }
+    creditors.sort(bigFirst);
+    debtors.sort(bigFirst);
+
+    var out = [];
+    var i = 0;
+    var j = 0;
+    // 최대 송금 횟수는 n-1건. 부동소수점이 튀어도 무한 루프에 빠지지 않게 막아 둔다.
+    var guard = 0;
+    while (i < debtors.length && j < creditors.length && guard < n * 2) {
+      guard++;
+      var amount = Math.min(debtors[i].left, creditors[j].left);
+      var won = Math.round(amount);
+      if (won > 0) {
+        out.push({
+          fromUid: debtors[i].uid,
+          fromName: debtors[i].name,
+          toUid: creditors[j].uid,
+          toName: creditors[j].name,
+          amount: won
+        });
+      }
+      debtors[i].left -= amount;
+      creditors[j].left -= amount;
+      if (debtors[i].left < 0.5) i++;
+      if (creditors[j].left < 0.5) j++;
+    }
+    return out;
+  }
+
   /* ---------- 라벨 ---------- */
 
   /** "8/1–8/31" */
@@ -298,6 +408,10 @@
     findCategory: findCategory,
     resolveCategory: resolveCategory,
     sortCategoriesByUsage: sortCategoriesByUsage,
+    UNKNOWN_MEMBER: UNKNOWN_MEMBER,
+    memberName: memberName,
+    memberShares: memberShares,
+    settlement: settlement,
     periodLabel: periodLabel,
     dayLabel: dayLabel
   };

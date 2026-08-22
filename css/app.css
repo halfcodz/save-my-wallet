@@ -35,3 +35,54 @@ input[type="date"] { -webkit-appearance: none; appearance: none; min-width: 0; }
 
 /* 길게 눌러 선택할 때 iOS의 텍스트 선택/복사 메뉴가 뜨지 않게 */
 .mm-row { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+
+/* ---- 아이폰 상태바(다이나믹 아일랜드) 자리 ---- */
+
+/* status-bar-style을 black-translucent로 두면 화면이 상태바 밑까지 올라온다.
+   그 자리는 프레임의 var(--bg)가 칠하므로 테마 색이 그대로 이어진다.
+   대신 내용이 아일랜드에 가리지 않게 그만큼 안쪽으로 밀어 준다. */
+[data-safe-top] { padding-top: env(safe-area-inset-top); }
+
+/* 홈 화면에서 연 경우엔 프레임 바깥(고무줄 영역)까지 같은 색으로 */
+@media (display-mode: standalone) {
+  html, body { background: var(--bg); }
+}
+@media (display-mode: fullscreen) {
+  html, body { background: var(--bg); }
+}
+
+/* 화면 전체가 고무줄처럼 튀지 않게 — 당겨서 새로고침과 겹친다 */
+html, body { overscroll-behavior: none; }
+[data-el="scroller"] { overscroll-behavior-y: contain; }
+
+/* ---- 당겨서 새로고침 ---- */
+
+.mm-ptr {
+  position: absolute; left: 0; right: 0;
+  top: env(safe-area-inset-top);
+  height: 0; z-index: 70;
+  display: flex; justify-content: center;
+  pointer-events: none;
+}
+.mm-ptr-move { opacity: 0; will-change: transform; }
+.mm-ptr-dot {
+  width: 26px; height: 26px; border-radius: 50%;
+  border: 2px solid var(--g2);
+  border-top-color: var(--fg);
+  background: var(--bg);
+}
+.mm-ptr-busy .mm-ptr-dot { animation: mmSpin .7s linear infinite; }
+
+.mm-spin {
+  width: 26px; height: 26px; border-radius: 50%;
+  border: 2px solid var(--g2);
+  border-top-color: var(--fg);
+  animation: mmSpin .7s linear infinite;
+}
+
+@keyframes mmSpin { to { transform: rotate(360deg); } }
+
+/* 움직임을 줄여 달라고 설정한 사람에게는 회전만 남기고 애니메이션을 아낀다 */
+@media (prefers-reduced-motion: reduce) {
+  .mm-ptr-move { transition: none !important; }
+}

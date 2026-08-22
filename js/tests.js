@@ -1,12 +1,12 @@
 /* tests.js — 계산 함수 검증. node로도, tests.html로도 돌아간다. */
 (function (root, factory) {
   var calc = root.MP && root.MP.calc ? root.MP.calc : require("./calc.js");
-  var store = root.MP && root.MP.store ? root.MP.store : require("./store.js");
-  var api = factory(calc, store);
+  var model = root.MP && root.MP.model ? root.MP.model : require("./model.js");
+  var api = factory(calc, model);
   root.MP = root.MP || {};
   root.MP.tests = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, function (calc, store) {
+})(typeof globalThis !== "undefined" ? globalThis : this, function (calc, model) {
   "use strict";
 
   var results = [];
@@ -194,7 +194,7 @@
     ok("검증: 상한 초과 불가", !calc.isValidAmount(1000000000));
 
     /* ---------- 13. 카테고리 삭제: 지출에는 이름이 남는다 ---------- */
-    var cats = store.defaultCategories();
+    var cats = model.defaultCategories();
     eq("카테고리: 정상 조회", calc.findCategory(cats, "cat_0").name, "식사");
     eq("카테고리: 없으면 null", calc.findCategory(cats, "없는id"), null);
 
@@ -202,19 +202,19 @@
     var live = exp("b1", 5000, "2026-08-22", "cat_0");
     eq("표시: 살아있는 카테고리", calc.resolveCategory(live, cats).name, "식사");
     eq("표시: 삭제 표시 아님", calc.resolveCategory(live, cats).deleted, false);
-    var renamed = store.clone(cats);
+    var renamed = model.clone(cats);
     renamed[0].name = "밥값";
     eq("표시: 이름 변경이 지출에 반영됨", calc.resolveCategory(live, renamed).name, "밥값");
 
     // 카테고리 삭제 -> 지출은 남고, 이름/이모지가 지출에 스냅샷된다
-    var draft = store.initialData();
+    var draft = model.initialData();
     draft.budgets = [budget({ startDate: "2026-08-01", endDate: "2026-08-31", totalAmount: 800000 })];
     draft.expenses = [
       exp("b1", 12500, "2026-08-20", "cat_8", "세제"),
       exp("b1", 7300, "2026-08-20", "cat_13")
     ];
-    eq("삭제 전: 사용 건수 1", store.categoryUsageCount(draft, "cat_8"), 1);
-    store.deleteCategory(draft, "cat_8");
+    eq("삭제 전: 사용 건수 1", model.categoryUsageCount(draft, "cat_8"), 1);
+    model.deleteCategory(draft, "cat_8");
     eq("삭제 후: 카테고리 13개", draft.categories.length, 13);
     eq("삭제 후: 지출은 그대로 2건", draft.expenses.length, 2);
     eq("삭제 후: 지출에 이름이 남음", draft.expenses[0].categoryName, "생필품");
@@ -223,7 +223,7 @@
     eq("삭제 후: deleted 플래그", calc.resolveCategory(draft.expenses[0], draft.categories).deleted, true);
     eq("삭제 후: 안 지운 카테고리는 영향 없음", calc.resolveCategory(draft.expenses[1], draft.categories).name, "기타");
     ok("삭제 후: order 재정렬", draft.categories.every(function (c, i) { return c.order === i; }));
-    eq("삭제 후: 저장/복원해도 이름 유지", store.sanitize(store.clone(draft)).expenses[0].categoryName, "생필품");
+    eq("삭제 후: 저장/복원해도 이름 유지", model.sanitize(model.clone(draft)).expenses[0].categoryName, "생필품");
 
     // 이름 스냅샷이 없는 고아 지출(외부에서 데이터가 깨진 경우)도 화면이 안 깨진다
     var noSnapshot = exp("b1", 100, "2026-08-22", "사라진cat");
@@ -261,7 +261,7 @@
     eq("정렬: 기록 없으면 마지막도 원래대로", noUse[noUse.length - 1].name, "기타");
 
     /* ---------- 16. 스키마 / 정규화 ---------- */
-    var init = store.initialData();
+    var init = model.initialData();
     eq("초기: 스키마 버전", init.schemaVersion, 1);
     eq("초기: 예산 없음", init.budgets.length, 0);
     eq("초기: 지출 없음", init.expenses.length, 0);
@@ -270,8 +270,8 @@
     eq("초기: 테마 light", init.settings.theme, "light");
     ok("초기: 카테고리에 order/isDefault 존재", init.categories[0].order === 0 && init.categories[0].isDefault === true);
 
-    eq("정규화: null 입력", store.sanitize(null).budgets.length, 0);
-    eq("정규화: 이상한 입력", store.sanitize("hello").categories.length, 14);
+    eq("정규화: null 입력", model.sanitize(null).budgets.length, 0);
+    eq("정규화: 이상한 입력", model.sanitize("hello").categories.length, 14);
 
     var dirty = {
       schemaVersion: 1,
@@ -288,7 +288,7 @@
       ],
       settings: { activeBudgetId: "없는예산", theme: "dark" }
     };
-    var clean = store.sanitize(dirty);
+    var clean = model.sanitize(dirty);
     eq("정규화: 잘못된 날짜 예산 제거", clean.budgets.length, 2);
     eq("정규화: 빈 이름 기본값", clean.budgets[0].name, "예산");
     eq("정규화: 금액 정수화", clean.budgets[0].totalAmount, 800000);
@@ -299,14 +299,105 @@
     eq("정규화: 테마 유지", clean.settings.theme, "dark");
     eq("정규화: 스키마 버전 부여", clean.schemaVersion, 1);
 
-    var noVersion = store.migrate({ budgets: [], expenses: [], categories: [], settings: {} });
+    var noVersion = model.migrate({ budgets: [], expenses: [], categories: [], settings: {} });
     eq("마이그레이션: 버전 필드 없어도 v1로", noVersion.schemaVersion, 1);
     eq("마이그레이션: 카테고리 비면 기본값 복구", noVersion.categories.length, 14);
 
-    var future = store.migrate({ schemaVersion: 99, budgets: [], expenses: [], categories: [], settings: {} });
+    var future = model.migrate({ schemaVersion: 99, budgets: [], expenses: [], categories: [], settings: {} });
     ok("마이그레이션: 미래 버전도 죽지 않음", future.categories.length === 14);
 
-    /* ---------- 17. 자정 넘김 ---------- */
+    /* ---------- 17. 함께 쓰는 예산: 사람별 합계와 정산 ---------- */
+    var trip = model.normalizeBudget({
+      id: "t1",
+      name: "부산 여행",
+      startDate: "2026-08-01",
+      endDate: "2026-08-03",
+      totalAmount: 300000,
+      ownerUid: "u1",
+      memberUids: ["u1", "u2", "u3"],
+      members: { u1: { name: "지민" }, u2: { name: "예은" }, u3: { name: "하늘" } }
+    });
+    ok("공유: 둘 이상이면 함께 쓰는 예산", trip.shared);
+    eq("공유: 멤버 3명", trip.memberUids.length, 3);
+
+    var solo = model.normalizeBudget({
+      id: "s1", startDate: "2026-08-01", endDate: "2026-08-03",
+      totalAmount: 1000, ownerUid: "u1", memberUids: ["u1"]
+    });
+    ok("공유: 혼자면 함께 쓰는 예산이 아님", !solo.shared);
+    ok("공유: 만든 사람은 멤버에 자동 포함", solo.memberUids[0] === "u1");
+
+    var withCode = model.normalizeBudget({
+      id: "c1", startDate: "2026-08-01", endDate: "2026-08-03",
+      totalAmount: 1000, ownerUid: "u1", memberUids: ["u1"], inviteCode: "K7QMB4XZ"
+    });
+    ok("공유: 초대 코드가 켜져 있으면 함께 쓰는 예산", withCode.shared);
+    eq("공유: 잘못된 코드는 버린다", model.normalizeBudget({
+      id: "c2", startDate: "2026-08-01", endDate: "2026-08-03",
+      totalAmount: 1000, ownerUid: "u1", memberUids: ["u1"], inviteCode: "짧음"
+    }).inviteCode, null);
+
+    var tripExp = [
+      { uid: "u1", amount: 60000 },
+      { uid: "u2", amount: 30000 }
+    ];
+    var shares = calc.memberShares(tripExp, trip);
+    eq("사람별: 안 쓴 사람도 자기 줄을 갖는다", shares.length, 3);
+    eq("사람별: 많이 쓴 순", shares[0].name, "지민");
+    eq("사람별: 두 번째", shares[1].name, "예은");
+    eq("사람별: 한 푼도 안 쓴 사람은 0원", shares[2].amount, 0);
+    eq("사람별: 비율", Math.round(shares[0].pct), 67);
+
+    var moves = calc.settlement(shares);
+    eq("정산: 한 번만 보내면 끝", moves.length, 1);
+    eq("정산: 덜 낸 사람이 보낸다", moves[0].fromName, "하늘");
+    eq("정산: 더 낸 사람이 받는다", moves[0].toName, "지민");
+    eq("정산: 금액은 1인당 몫과의 차이", moves[0].amount, 30000);
+
+    var even = calc.memberShares(
+      [{ uid: "u1", amount: 10000 }, { uid: "u2", amount: 10000 }, { uid: "u3", amount: 10000 }],
+      trip
+    );
+    eq("정산: 똑같이 냈으면 주고받을 게 없다", calc.settlement(even).length, 0);
+    eq("정산: 아무도 안 썼으면 빈 목록", calc.settlement(calc.memberShares([], trip)).length, 0);
+    eq("정산: 혼자면 정산 없음", calc.settlement(calc.memberShares([{ uid: "u1", amount: 100 }], solo)).length, 0);
+
+    // 나간 사람이 적어 둔 내역도 이름을 잃지 않는다
+    var leftBehind = calc.memberShares([{ uid: "u9", amount: 5000, userName: "손님" }], trip);
+    eq("사람별: 나간 사람 이름은 지출에 남은 것으로", leftBehind[0].name, "손님");
+    eq("사람별: 이름도 uid도 없으면 기본값", calc.memberShares([{ amount: 100 }], solo)[0].name, "알 수 없음");
+
+    // 송금 횟수는 인원수를 넘지 않는다 (금액이 지저분해도)
+    var messy = calc.memberShares(
+      [{ uid: "u1", amount: 10000 }, { uid: "u2", amount: 1 }],
+      trip
+    );
+    ok("정산: 송금 횟수는 인원수 미만", calc.settlement(messy).length < 3);
+    ok("정산: 금액은 모두 양수 정수", calc.settlement(messy).every(function (m) {
+      return m.amount > 0 && Math.floor(m.amount) === m.amount;
+    }));
+
+    /* ---------- 18. 초대 코드 ---------- */
+    eq("초대코드: 8자리", model.newInviteCode().length, 8);
+    ok("초대코드: 헷갈리는 글자(I,O,0,1)를 쓰지 않는다", !/[IO01]/.test(model.newInviteCode()));
+    eq("초대코드: 소문자·공백·하이픈 정리", model.normalizeInviteCode(" k7-qmb 4xz "), "K7QMB4XZ");
+    eq("초대코드: 0은 O로, 1은 I로 고쳐 받는다", model.normalizeInviteCode("0AB1CDEF"), "OABICDEF");
+    eq("초대코드: 길이 초과는 자른다", model.normalizeInviteCode("ABCDEFGHIJK").length, 8);
+    ok("초대코드: 짧으면 거부", !model.isInviteCode("ABC"));
+    ok("초대코드: 방금 만든 코드는 유효", model.isInviteCode(model.newInviteCode()));
+
+    /* ---------- 19. 지출에 누가 썼는지 ---------- */
+    var withUser = model.normalizeExpense({
+      id: "x1", budgetId: "t1", amount: 100, date: "2026-08-01",
+      uid: " u1 ", userName: " 지민 "
+    });
+    eq("지출: 작성자 uid 보존", withUser.uid, "u1");
+    eq("지출: 작성자 이름 공백 정리", withUser.userName, "지민");
+    ok("지출: 작성자 정보가 없어도 정상", model.normalizeExpense({
+      id: "x2", budgetId: "t1", amount: 100, date: "2026-08-01"
+    }).uid === undefined);
+
+    /* ---------- 20. 자정 넘김 ---------- */
     var beforeMidnight = calc.computeBudgetStats(b, e1, "2026-08-22");
     var afterMidnight = calc.computeBudgetStats(b, e1, "2026-08-23");
     eq("자정: 남은 일수 하루 줄어듦", beforeMidnight.daysLeft - afterMidnight.daysLeft, 1);

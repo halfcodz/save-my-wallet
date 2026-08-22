@@ -1,0 +1,144 @@
+rules_version = '2';
+
+/* Firestore 보안 규칙.
+
+   Firebase 콘솔 → Firestore Database → 규칙 탭에 이 내용을 그대로 붙여넣고 "게시".
+   웹 앱의 Firebase 설정(js/firebase-config.js)은 공개되는 값이라 보안이 아니다.
+   실제 방어선은 여기다 — 서버가 강제한다.
+
+   요약
+   - 내 사용자 문서는 나만 읽고 쓴다.
+   - 예산은 멤버만 읽고, 만든 사람만 고치고 지운다.
+   - 초대 코드를 정확히 아는 사람은 자기 자신만 멤버로 넣을 수 있다.
+   - 멤버는 자기 자신만 빼거나 자기 이름만 고칠 수 있다.
+   - 지출은 그 예산의 멤버끼리 함께 쓴다. */
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function uid() {
+      return request.auth.uid;
+    }
+
+    /* ---------- 사용자 ---------- */
+
+    match /users/{userId} {
+      allow read, write: if signedIn() && userId == uid();
+    }
+
+    /* ---------- 초대 코드 -> 예산 id ----------
+       한 건씩 조회(get)만 허용한다. 목록(list)은 막아서 코드를 훑을 수 없게 한다. */
+
+    match /invites/{code} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['budgetId', 'ownerUid', 'createdAt'])
+        && request.resource.data.ownerUid == uid()
+        && request.resource.data.budgetId is string;
+      allow update: if false;
+      allow delete: if signedIn() && resource.data.ownerUid == uid();
+    }
+
+    /* ---------- 예산 ---------- */
+
+    match /budgets/{budgetId} {
+
+      function isMember() {
+        return signedIn() && uid() in resource.data.memberUids;
+      }
+
+      function isOwner() {
+        return signedIn() && resource.data.ownerUid == uid();
+      }
+
+      function changedKeys() {
+        return request.resource.data.diff(resource.data).affectedKeys();
+      }
+
+      /* 멤버 목록에 나만 새로 넣는가 */
+      function addsOnlySelf() {
+        return !(uid() in resource.data.memberUids)
+          && uid() in request.resource.data.memberUids
+          && request.resource.data.memberUids.removeAll([uid()]) == resource.data.memberUids
+          && request.resource.data.memberUids.size() <= 20;
+      }
+
+      /* 멤버 목록에서 나만 빼는가 */
+      function removesOnlySelf() {
+        return uid() in resource.data.memberUids
+          && !(uid() in request.resource.data.memberUids)
+          && resource.data.memberUids.removeAll([uid()]) == request.resource.data.memberUids;
+      }
+
+      /* members 맵에서 내 자리만 건드리는가 (이름 변경 / 참여 / 나가기) */
+      function touchesOnlyMyMemberEntry() {
+        return request.resource.data.members
+          .diff(resource.data.members)
+          .affectedKeys()
+          .hasOnly([uid()]);
+      }
+
+      allow read: if isMember();
+
+      allow create: if signedIn()
+        && request.resource.data.ownerUid == uid()
+        && request.resource.data.memberUids == [uid()]
+        && request.resource.data.inviteCode == null
+        && request.resource.data.name is string
+        && request.resource.data.totalAmount is number;
+
+      /* 1) 만든 사람: 다 고칠 수 있다. 단 주인 자리는 넘기지 못한다. */
+      allow update: if isOwner()
+        && request.resource.data.ownerUid == resource.data.ownerUid;
+
+      /* 2) 초대 코드가 켜져 있는 예산에 스스로 들어오기 */
+      allow update: if signedIn()
+        && resource.data.inviteCode != null
+        && changedKeys().hasOnly(['memberUids', 'members'])
+        && addsOnlySelf()
+        && touchesOnlyMyMemberEntry();
+
+      /* 3) 멤버가 스스로 나가거나, 자기 이름만 고치기 */
+      allow update: if isMember()
+        && changedKeys().hasOnly(['memberUids', 'members'])
+        && (removesOnlySelf() || request.resource.data.memberUids == resource.data.memberUids)
+        && touchesOnlyMyMemberEntry();
+
+      allow delete: if isOwner();
+
+      /* ---------- 지출 ---------- */
+
+      match /expenses/{expenseId} {
+
+        function budgetMembers() {
+          return get(/databases/$(database)/documents/budgets/$(budgetId)).data.memberUids;
+        }
+
+        function amMember() {
+          return signedIn() && uid() in budgetMembers();
+        }
+
+        allow read: if amMember();
+
+        allow create: if amMember()
+          && request.resource.data.budgetId == budgetId
+          && request.resource.data.amount is number
+          && request.resource.data.amount > 0
+          && request.resource.data.date is string;
+
+        /* 여행 가계부는 서로 대신 고쳐 주는 일이 잦아서 멤버면 수정·삭제할 수 있게 둔다 */
+        allow update: if amMember()
+          && request.resource.data.budgetId == budgetId
+          && request.resource.data.amount is number
+          && request.resource.data.amount > 0;
+
+        allow delete: if amMember();
+      }
+    }
+  }
+}
