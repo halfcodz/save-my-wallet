@@ -32,3 +32,6 @@ input[type="date"] { -webkit-appearance: none; appearance: none; min-width: 0; }
 @supports (padding: max(0px)) {
   [data-el="fabWrap"] { padding-bottom: env(safe-area-inset-bottom); }
 }
+
+/* 길게 눌러 선택할 때 iOS의 텍스트 선택/복사 메뉴가 뜨지 않게 */
+.mm-row { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
