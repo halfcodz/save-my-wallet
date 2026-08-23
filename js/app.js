@@ -364,6 +364,12 @@
   }
 
   function render() {
+    // 손가락을 따라가는 동안 화면을 다시 만들면 그 프레임이 통째로 밀린다.
+    // 손을 뗀 뒤에 한 번 몰아서 그린다.
+    if (pagerDrag.live) {
+      pagerDrag.dirty = true;
+      return;
+    }
     data = store.get();
     var st = auth.state();
     var ready = appReady();
@@ -2223,43 +2229,93 @@
     return el(PAGE_IDS[ui.tab] || "pageHome");
   }
 
-  function pagerWidth() {
-    var node = el("pager");
-    return node ? node.clientWidth : 0;
+  var SNAP = "transform .28s cubic-bezier(.22,.61,.36,1)";
+
+  /**
+   * 화면 폭. 끌고 있는 동안에는 절대 다시 재지 않는다.
+   * 매 프레임 clientWidth 를 읽으면 브라우저가 그때마다 배치를 다시 계산해서 끊긴다.
+   */
+  function trackWidth() {
+    if (!pagerDrag.w) {
+      var node = el("pager");
+      pagerDrag.w = node ? node.clientWidth : 0;
+    }
+    return pagerDrag.w;
+  }
+
+  /** 지금 탭이 놓여야 할 자리 */
+  function baseX() {
+    return -Math.max(0, TABS.indexOf(ui.tab)) * trackWidth();
+  }
+
+  /** 트랙에 값을 적는 유일한 곳. 바뀐 것만 적는다. */
+  function writeTrack(x, animate) {
+    var track = el("track");
+    if (!track) return;
+    if (pagerDrag.animate !== animate) {
+      track.style.transition = animate ? SNAP : "none";
+      pagerDrag.animate = animate;
+    }
+    if (pagerDrag.at === x) return;
+    pagerDrag.at = x;
+    track.style.transform = "translate3d(" + x + "px,0,0)";
+  }
+
+  function raf(fn) {
+    return typeof window.requestAnimationFrame === "function"
+      ? window.requestAnimationFrame(fn)
+      : setTimeout(fn, 16);
+  }
+
+  function unraf(id) {
+    if (!id) return;
+    if (typeof window.cancelAnimationFrame === "function") window.cancelAnimationFrame(id);
+    else clearTimeout(id);
   }
 
   /**
-   * 트랙을 제자리에 놓는다.
-   * offset 은 손가락이 끌고 간 만큼. animate 면 손을 뗀 뒤 미끄러져 붙는다.
+   * 손가락이 움직일 때마다 그리지 않고, 다음 화면 갱신에 한 번만 그린다.
+   * 터치는 화면보다 자주 들어오기 때문에 그냥 그리면 헛일이 쌓인다.
    */
-  function paintPager(offset, animate) {
-    var track = el("track");
-    if (!track) return;
-    var i = Math.max(0, TABS.indexOf(ui.tab));
-    var w = pagerWidth();
-    track.style.transition = animate
-      ? "transform .28s cubic-bezier(.22,.61,.36,1)"
-      : "none";
-    track.style.transform = "translate3d(" + (-i * w + (offset || 0)) + "px,0,0)";
+  function schedulePagerFrame() {
+    if (pagerDrag.raf) return;
+    pagerDrag.raf = raf(function () {
+      pagerDrag.raf = 0;
+      if (!pagerDrag.live) return;
+      writeTrack(baseX() + pagerDrag.dx, false);
+    });
+  }
 
-    if (!animate) return;
+  /** 손을 뗀 뒤 제자리로 미끄러진다 */
+  function settlePager() {
+    unraf(pagerDrag.raf);
+    pagerDrag.raf = 0;
+    writeTrack(baseX(), true);
     pagerDrag.settling = true;
     clearTimeout(pagerDrag.settleTimer);
     pagerDrag.settleTimer = setTimeout(function () {
       pagerDrag.settling = false;
-    }, 320);
+      flushPagerRender();
+    }, 300);
   }
 
   /** 데이터가 바뀌어 다시 그릴 때, 끌고 있거나 미끄러지는 중이면 건드리지 않는다 */
   function syncPager() {
     if (pagerDrag.live || pagerDrag.settling) return;
-    paintPager(0, false);
+    writeTrack(baseX(), false);
+  }
+
+  /** 끄는 동안 미뤄 둔 다시 그리기를 이제 처리한다 */
+  function flushPagerRender() {
+    if (!pagerDrag.dirty) return;
+    pagerDrag.dirty = false;
+    render();
   }
 
   /** 탭을 바꾼다. 탭을 눌러서 오든 손가락으로 밀어서 오든 같은 길을 쓴다. */
   function setTab(name) {
     if (ui.tab === name) {
-      paintPager(0, true); // 덜 밀었으면 제자리로
+      settlePager(); // 덜 밀었으면 제자리로
       return;
     }
     ui.tab = name;
@@ -2267,7 +2323,7 @@
     ui.selMode = false;
     ui.selected = [];
     render();
-    paintPager(0, true);
+    settlePager();
   }
 
   /** 옆 탭으로. 양 끝에서는 넘어가지 않는다 (돌아 나오지 않는다) */
@@ -2289,12 +2345,17 @@
 
   var pagerDrag = {
     live: false,
-    axis: 0,       // 0 아직, 1 가로(우리 것), -1 세로(스크롤)
-    x: 0, y: 0, dx: 0, w: 0,
+    axis: 0,        // 0 아직, 1 가로(우리 것), -1 세로(스크롤)
+    x: 0, y: 0, dx: 0,
+    w: 0,           // 화면 폭. 끄는 동안 다시 재지 않는다
     lastX: 0, lastT: 0, v: 0,
     onRow: false,
     settling: false,
-    settleTimer: null
+    settleTimer: null,
+    raf: 0,         // 예약해 둔 다음 화면 갱신
+    at: null,       // 트랙에 마지막으로 적은 값
+    animate: null,  // 지금 붙어 있는 transition
+    dirty: false    // 끄는 동안 미뤄 둔 다시 그리기
   };
   var swallowClickUntil = 0;
 
@@ -2328,7 +2389,7 @@
       pagerDrag.x = t.clientX;
       pagerDrag.y = t.clientY;
       pagerDrag.dx = 0;
-      pagerDrag.w = pagerWidth();
+      trackWidth(); // 폭은 여기서 한 번만 잰다
       pagerDrag.lastX = t.clientX;
       pagerDrag.lastT = Date.now();
       pagerDrag.v = 0;
@@ -2341,7 +2402,7 @@
       if (ev.touches.length !== 1) {
         // 손가락이 하나 더 얹히면(확대 등) 우리 동작이 아니다
         pagerDrag.live = false;
-        paintPager(0, true);
+        settlePager();
         return;
       }
 
@@ -2363,14 +2424,16 @@
 
       if (ev.cancelable) ev.preventDefault(); // 가로로 정했으면 세로 스크롤은 멈춘다
 
+      // touchstart 와 같은 시계를 써야 한다. ev.timeStamp 는 기준이 달라 섞으면 안 된다.
       var now = Date.now();
       if (now > pagerDrag.lastT) {
         pagerDrag.v = (t.clientX - pagerDrag.lastX) / (now - pagerDrag.lastT);
         pagerDrag.lastX = t.clientX;
         pagerDrag.lastT = now;
       }
+      // 여기서는 값만 적어 두고, 그리기는 다음 화면 갱신에 한 번만 한다
       pagerDrag.dx = resist(dx);
-      paintPager(pagerDrag.dx, false);
+      schedulePagerFrame();
     }, { passive: false });
 
     host.addEventListener("touchend", function (ev) {
@@ -2381,26 +2444,34 @@
       pagerDrag.live = false;
       if (ev.touches.length) return;
 
-      var w = pagerDrag.w || pagerWidth();
+      pagerDrag.dx0 = pagerDrag.dx; // 방향 판단에 쓸 마지막 값
+      var w = trackWidth();
       // 화면 크기를 못 재는 환경(테스트 등)에서는 고정 거리로 판단한다
       var need = w > 0 ? w * TURN_RATIO : 60;
       var far = Math.abs(pagerDrag.dx) >= need;
       var flick = Math.abs(pagerDrag.v) >= FLICK_SPEED && Math.abs(pagerDrag.dx) > LOCK_SLOP;
 
-      if ((far || flick) && stepTab(pagerDrag.dx < 0 ? 1 : -1)) {
+      unraf(pagerDrag.raf);
+      pagerDrag.raf = 0;
+      pagerDrag.dx = 0;
+
+      if ((far || flick) && stepTab(pagerDrag.dx0 < 0 ? 1 : -1)) {
         // 같은 손짓의 끝을 브라우저가 탭으로 흘리는 경우만 막는다
         swallowClickUntil = Date.now() + 150;
       } else {
-        paintPager(0, true); // 덜 밀었으면 제자리로 미끄러진다
+        settlePager(); // 덜 밀었으면 제자리로 미끄러진다
+        flushPagerRender();
       }
-      pagerDrag.dx = 0;
     }, { passive: true });
 
     host.addEventListener("touchcancel", function () {
       if (!pagerDrag.live) return;
       pagerDrag.live = false;
+      unraf(pagerDrag.raf);
+      pagerDrag.raf = 0;
       pagerDrag.dx = 0;
-      paintPager(0, true);
+      settlePager();
+      flushPagerRender();
     }, { passive: true });
   }
 
@@ -2815,9 +2886,11 @@
 
   /* 화면 크기가 바뀌면 큰 숫자 맞춤을 다시 계산 */
   window.addEventListener("resize", function () {
-    scaleCache = null; // 화면이 바뀌었으니 배율을 다시 잰다
+    scaleCache = null;  // 화면이 바뀌었으니 배율을 다시 잰다
+    pagerDrag.w = 0;    // 폭도 다시 잰다
+    pagerDrag.at = null;
     render();
-    paintPager(0, false); // 폭이 달라졌으니 위치를 다시 잡는다
+    writeTrack(baseX(), false);
   });
 
   /* ---------- 시작 ---------- */

@@ -321,7 +321,8 @@ async function wait(ms) {
     for (let k = 1; k <= 4; k++) {
       const pt = at(200 + (dx * k) / 4, 400 + (dy * k) / 4);
       fire("touchmove", pt, [pt]);
-      if (slow) await wait(25); // 천천히 밀면 튕김으로 보지 않는다
+      // 실제 손가락은 프레임마다 들어온다. 같은 밀리초에 몰아 보내면 속도를 잴 수 없다.
+      await wait(slow ? 40 : 5);
     }
     fire("touchend", at(200 + dx, 400 + dy), []);
     await tick(8);

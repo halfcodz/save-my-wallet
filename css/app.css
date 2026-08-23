@@ -94,7 +94,9 @@ html[data-mm="dark"] {
   overflow-y: auto; overflow-x: hidden;
   overscroll-behavior: contain;
   padding-bottom: 8.25rem;
-  -webkit-overflow-scrolling: touch;
+  /* 한 장 안에서 일어난 일이 다른 장에 영향을 주지 않는다고 알려 준다.
+     미는 동안 브라우저가 세 장을 매번 다시 계산하지 않아도 된다. */
+  contain: layout paint;
 }
 
 /* ---- 아이폰 상태바(다이나믹 아일랜드) 자리 ---- */
