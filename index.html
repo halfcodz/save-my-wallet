@@ -138,10 +138,12 @@
       <button data-act="goSummary" data-el="tabSummary">요약</button>
     </div>
 
-    <div data-el="scroller" style="flex:1;min-height:0;overflow-y:auto;padding-bottom:8.25rem">
+    <!-- 세 화면을 옆으로 늘어놓고 통째로 민다. 각 장이 자기 세로 스크롤을 갖는다. -->
+    <div data-el="pager" class="mm-pager">
+    <div data-el="track" class="mm-track">
 
-      <!-- ----- 메인 ----- -->
-      <div data-show="isHome">
+      <!-- ----- 홈 ----- -->
+      <div data-el="pageHome" class="mm-page">
         <div style="padding:0.875rem 1.5rem 0">
           <div data-el="mainLabel" style="font-size:0.75rem;color:var(--g3);letter-spacing:.04em">남은 금액</div>
           <div data-el="remainingRow" style="display:flex;align-items:baseline;gap:0.25rem;margin-top:2px">
@@ -200,7 +202,7 @@
       </div>
 
       <!-- ----- 내역 ----- -->
-      <div data-show="isHistory" style="padding:0.625rem 0 0">
+      <div data-el="pageHistory" class="mm-page" style="padding:0.625rem 0 0">
         <div style="padding:0 1.25rem">
           <div data-show="selMode" style="display:flex;align-items:center;gap:0.875rem;padding:2px 0 0.75rem">
             <div data-el="selCountText" style="flex:1;font-size:0.875rem;font-weight:700">0개 선택됨</div>
@@ -235,7 +237,7 @@
       </div>
 
       <!-- ----- 요약 ----- -->
-      <div data-show="isSummary">
+      <div data-el="pageSummary" class="mm-page">
         <div style="padding:0.875rem 1.5rem 0">
           <div style="display:flex;flex-direction:column;align-items:center;padding-bottom:1.875rem">
             <div data-el="donut" style="width:10.5rem;height:10.5rem;border-radius:50%;display:grid;place-items:center">
@@ -247,7 +249,7 @@
             <div style="font-size:0.71875rem;color:var(--g3);padding-top:1rem"><span data-el="viewPeriodText2"></span> · 예산 <span data-el="viewTotalText">0</span>원</div>
           </div>
 
-          <div data-show="viewEmpty" style="padding:2.5rem 0;text-align:center;font-size:0.8125rem;color:var(--g3)">내역이 없습니다</div>
+          <div data-show="summaryEmpty" style="padding:2.5rem 0;text-align:center;font-size:0.8125rem;color:var(--g3)">내역이 없습니다</div>
 
           <div data-show="hasShares" style="font-size:0.75rem;color:var(--g3);padding-bottom:0.25rem">카테고리별</div>
           <div data-el="shares"></div>
@@ -268,6 +270,7 @@
         </div>
       </div>
 
+    </div>
     </div>
   </div>
 

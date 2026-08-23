@@ -306,20 +306,25 @@ async function wait(ms) {
   const blur = (name) => el(name).dispatchEvent(new win.Event("blur"));
   const dialogOpen = () => visible("dialogOpen");
 
-  /* 손가락으로 미는 흉내. from 을 주면 그 요소에서 시작한다. */
-  const drag = async (dx, dy, from) => {
-    const node = from || el("scroller");
+  /* 손가락으로 미는 흉내. touchmove 를 거쳐야 가로/세로가 정해진다. */
+  const drag = async (dx, dy, from, slow) => {
+    const node = from || currentPage();
     const at = (x, y) => ({ clientX: x, clientY: y });
-    const start = new win.Event("touchstart", { bubbles: true });
-    start.touches = [at(200, 400)];
-    start.changedTouches = start.touches;
-    node.dispatchEvent(start);
+    const fire = (name, pt, touches) => {
+      const ev = new win.Event(name, { bubbles: true, cancelable: true });
+      ev.touches = touches;
+      ev.changedTouches = [pt];
+      node.dispatchEvent(ev);
+    };
 
-    const end = new win.Event("touchend", { bubbles: true });
-    end.touches = [];
-    end.changedTouches = [at(200 + dx, 400 + dy)];
-    node.dispatchEvent(end);
-    await tick(6);
+    fire("touchstart", at(200, 400), [at(200, 400)]);
+    for (let k = 1; k <= 4; k++) {
+      const pt = at(200 + (dx * k) / 4, 400 + (dy * k) / 4);
+      fire("touchmove", pt, [pt]);
+      if (slow) await wait(25); // 천천히 밀면 튕김으로 보지 않는다
+    }
+    fire("touchend", at(200 + dx, 400 + dy), []);
+    await tick(8);
   };
   // 날짜는 오늘을 기준으로 잡는다. 고정 날짜를 쓰면 그 기간이 지나는 순간 깨진다.
   const C = win.MP.calc;
@@ -330,11 +335,17 @@ async function wait(ms) {
   const month = C.monthBounds(todayIso);
   const monthPeriod = C.periodLabel({ startDate: month.start, endDate: month.end });
 
-  const currentTab = () =>
-    visible("isHome") ? "home"
-    : visible("isHistory") ? "history"
-    : visible("isSummary") ? "summary"
-    : "?";
+  const currentPage = () => el({ home: "pageHome", history: "pageHistory", summary: "pageSummary" }[currentTab()] || "pageHome");
+  const trackShift = () => (el("track").style.transform || "").match(/-?\d+(\.\d+)?/);
+  // 세 장은 늘 그려져 있다. 지금 어느 장인지는 앱이 트랙을 옮긴 위치로 안다.
+  // jsdom 은 폭이 0이라 위치가 모두 0이므로, 홈 여부(＋ 버튼)와 탭 굵기로 읽는다.
+  const currentTab = () => {
+    const on = (name) => el(name).style.fontWeight === "700";
+    if (on("tabHome")) return "home";
+    if (on("tabHistory")) return "history";
+    if (on("tabSummary")) return "summary";
+    return "?";
+  };
   const swipeLeft = (from) => drag(-90, 0, from);   // 다음 탭
   const swipeRight = (from) => drag(90, 0, from);   // 이전 탭
   const acceptDialog = async () => {
@@ -716,7 +727,7 @@ async function wait(ms) {
   /* --- 8. 요약: 사람별 + 정산 --- */
   click('[data-act="goSummary"]');
   await tick(6);
-  ok("요약 탭이 열린다", visible("isSummary"));
+  eq("요약 탭이 열린다", currentTab(), "summary");
   ok("사람별 영역이 보인다", visible("isSharedSummary"));
   eq("1인당 몫", txt("perPersonText"), "60,000");
   ok("정산 안내가 뜬다", visible("hasSettlement"));
@@ -743,7 +754,7 @@ async function wait(ms) {
   /* --- 9. 내역 탭 --- */
   click('[data-act="goHistory"]');
   await tick(6);
-  ok("내역 탭이 열린다", visible("isHistory"));
+  eq("내역 탭이 열린다", currentTab(), "history");
   eq("합계", txt("viewSpentText"), "120,000");
   ok("작성자 이름이 줄마다 보인다", el("groups").textContent.includes("예은"));
 
@@ -927,26 +938,30 @@ async function wait(ms) {
 
   await swipeLeft();
   eq("홈에서 왼쪽으로 밀면 내역", currentTab(), "history");
-  ok("내역 화면이 실제로 보인다", visible("isHistory"));
-  ok("오른쪽에서 들어온 표시", el("scroller").classList.contains("mm-in-right"));
+  ok("내역 탭이 굵어진다", el("tabHistory").style.fontWeight === "700");
+  ok("세 장이 모두 붙어 있다", !!el("pageHome") && !!el("pageHistory") && !!el("pageSummary"));
 
   await swipeLeft();
   eq("내역에서 왼쪽으로 밀면 요약", currentTab(), "summary");
-  ok("요약 화면이 실제로 보인다", visible("isSummary"));
+  ok("요약 탭이 굵어진다", el("tabSummary").style.fontWeight === "700");
 
   await swipeLeft();
   eq("요약에서 왼쪽으로 더 밀어도 그대로 (뒤가 없다)", currentTab(), "summary");
 
   await swipeRight();
   eq("요약에서 오른쪽으로 밀면 내역", currentTab(), "history");
-  ok("왼쪽에서 들어온 표시", el("scroller").classList.contains("mm-in-left"));
+  ok("트랙이 통째로 움직인다", (el("track").style.transform || "").includes("translate3d"));
 
   await swipeRight();
   eq("내역에서 오른쪽으로 밀면 홈", currentTab(), "home");
 
   // 너무 짧거나 세로에 가까우면 넘기지 않는다
+  await drag(-30, 0, null, true);
+  eq("짧고 느리게 민 것은 무시", currentTab(), "home");
   await drag(-30, 0);
-  eq("살짝 민 것은 무시", currentTab(), "home");
+  eq("짧아도 빠르게 튕기면 넘어간다", currentTab(), "history");
+  await drag(30, 0);
+  eq("돌아온다", currentTab(), "home");
   await drag(-90, 120);
   eq("세로에 가까우면 스크롤로 본다", currentTab(), "home");
 

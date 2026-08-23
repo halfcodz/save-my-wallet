@@ -80,15 +80,21 @@ html[data-mm="dark"] {
 .mm-cal-dow > div { text-align: center; font-size: 0.6875rem; color: var(--g3); }
 
 /* ---- 탭 좌우 스와이프 ----
-   화면을 통째로 끌고 다니지 않고, 바뀐 뒤에 방향만 짧게 보여 준다.
-   어느 쪽으로 넘어왔는지 알 수 있으면 충분하다. */
-@keyframes mmInRight { from { transform: translateX(1.25rem); opacity: .3 } to { transform: none; opacity: 1 } }
-@keyframes mmInLeft  { from { transform: translateX(-1.25rem); opacity: .3 } to { transform: none; opacity: 1 } }
-.mm-in-right { animation: mmInRight .19s ease-out; }
-.mm-in-left  { animation: mmInLeft .19s ease-out; }
-
-@media (prefers-reduced-motion: reduce) {
-  .mm-in-right, .mm-in-left { animation: none; }
+   홈·내역·요약을 옆으로 늘어놓고 통째로 민다.
+   손가락을 따라 옆 화면이 실제로 딸려 와야 넘기는 느낌이 난다. */
+.mm-pager { flex: 1; min-height: 0; position: relative; overflow: hidden; }
+.mm-track {
+  display: flex; height: 100%;
+  will-change: transform;
+  /* 세로는 브라우저에게, 가로는 우리가. 이게 있어야 스크롤이 끊기지 않는다. */
+  touch-action: pan-y;
+}
+.mm-page {
+  flex: 0 0 100%; width: 100%; height: 100%;
+  overflow-y: auto; overflow-x: hidden;
+  overscroll-behavior: contain;
+  padding-bottom: 8.25rem;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* ---- 아이폰 상태바(다이나믹 아일랜드) 자리 ---- */
@@ -108,7 +114,7 @@ html[data-mm="dark"] {
 
 /* 화면 전체가 고무줄처럼 튀지 않게 — 당겨서 새로고침과 겹친다 */
 html, body { overscroll-behavior: none; }
-[data-el="scroller"] { overscroll-behavior-y: contain; }
+/* 각 장이 자기 스크롤을 갖는다 (.mm-page) */
 
 /* ---- 당겨서 새로고침 ---- */
 

@@ -381,9 +381,8 @@
     show("noBudget", ready && !active);
     show("hasBudget", ready && !!active);
 
+    // 홈 표시는 입력(＋) 버튼용. 세 장은 늘 그려 두고 위치만 옮긴다.
     show("isHome", ready && !!active && ui.tab === "home");
-    show("isHistory", ready && !!active && ui.tab === "history");
-    show("isSummary", ready && !!active && ui.tab === "summary");
     show("addOpen", ui.addOpen);
     show("menuOpen", ui.menuOpen);
     show("budgetOpen", ui.budgetOpen);
@@ -432,6 +431,7 @@
     renderPersonal();
     renderDaySheet();
     renderDialog();
+    syncPager();
   }
 
   /** 화면에 보이는 기간. 나의 가계부는 이번 달. */
@@ -651,8 +651,11 @@
     return activeBudget();
   }
 
+  /**
+   * 내역과 요약을 함께 그린다.
+   * 옆 장이 손가락을 따라 같이 보이므로, 보고 있지 않은 쪽도 채워져 있어야 한다.
+   */
   function renderView() {
-    if (ui.tab !== "history" && ui.tab !== "summary") return;
     var view = viewBudget();
     if (!view) return;
 
@@ -668,15 +671,16 @@
     text("selCountText", ui.selected.length + "개 선택됨");
 
     var listMode = ui.historyView === "list";
-    show("viewEmpty", list.length === 0 && (ui.tab !== "history" || listMode));
+    show("viewEmpty", list.length === 0 && listMode);
+    show("summaryEmpty", list.length === 0);
     show("hasRows", list.length > 0 && listMode);
     show("hasShares", list.length > 0);
 
-    if (ui.tab === "history") {
-      css("calToggle", calToggleStyle());
-      if (listMode) renderGroups(list, view);
-      else renderCalendar(list, view);
-    } else renderSummary(view, list, spent);
+    css("calToggle", calToggleStyle());
+    if (listMode) renderGroups(list, view);
+    else renderCalendar(list, view);
+
+    renderSummary(view, list, spent);
   }
 
   function renderGroups(list, view) {
@@ -2078,19 +2082,58 @@
 
   var TABS = ["home", "history", "summary"];
 
+  var PAGE_IDS = { home: "pageHome", history: "pageHistory", summary: "pageSummary" };
+
+  /** 지금 보고 있는 장 (세로 스크롤은 장마다 따로 있다) */
+  function currentPage() {
+    return el(PAGE_IDS[ui.tab] || "pageHome");
+  }
+
+  function pagerWidth() {
+    var node = el("pager");
+    return node ? node.clientWidth : 0;
+  }
+
   /**
-   * 탭을 바꾼다. 어느 쪽에서 넘어왔는지 짧게 보여 준다.
-   * 탭을 눌러서 오든 스와이프로 오든 같은 길을 쓴다.
+   * 트랙을 제자리에 놓는다.
+   * offset 은 손가락이 끌고 간 만큼. animate 면 손을 뗀 뒤 미끄러져 붙는다.
    */
+  function paintPager(offset, animate) {
+    var track = el("track");
+    if (!track) return;
+    var i = Math.max(0, TABS.indexOf(ui.tab));
+    var w = pagerWidth();
+    track.style.transition = animate
+      ? "transform .28s cubic-bezier(.22,.61,.36,1)"
+      : "none";
+    track.style.transform = "translate3d(" + (-i * w + (offset || 0)) + "px,0,0)";
+
+    if (!animate) return;
+    pagerDrag.settling = true;
+    clearTimeout(pagerDrag.settleTimer);
+    pagerDrag.settleTimer = setTimeout(function () {
+      pagerDrag.settling = false;
+    }, 320);
+  }
+
+  /** 데이터가 바뀌어 다시 그릴 때, 끌고 있거나 미끄러지는 중이면 건드리지 않는다 */
+  function syncPager() {
+    if (pagerDrag.live || pagerDrag.settling) return;
+    paintPager(0, false);
+  }
+
+  /** 탭을 바꾼다. 탭을 눌러서 오든 손가락으로 밀어서 오든 같은 길을 쓴다. */
   function setTab(name) {
-    if (ui.tab === name) return;
-    var step = TABS.indexOf(name) - TABS.indexOf(ui.tab);
+    if (ui.tab === name) {
+      paintPager(0, true); // 덜 밀었으면 제자리로
+      return;
+    }
     ui.tab = name;
     ui.swipedId = null;
     ui.selMode = false;
     ui.selected = [];
-    slideTab(step);
     render();
+    paintPager(0, true);
   }
 
   /** 옆 탭으로. 양 끝에서는 넘어가지 않는다 (돌아 나오지 않는다) */
@@ -2103,22 +2146,22 @@
     return true;
   }
 
-  function slideTab(step) {
-    var node = el("scroller");
-    if (!node || !step) return;
-    node.classList.remove("mm-in-left", "mm-in-right");
-    // 같은 방향으로 연달아 넘겨도 애니메이션이 다시 돌게 한 번 재계산시킨다
-    if (node.offsetWidth) {
-      /* 값을 읽는 것 자체가 목적이다 */
-    }
-    node.classList.add(step > 0 ? "mm-in-right" : "mm-in-left");
-  }
-
   /* ---------- 좌우 스와이프로 탭 넘기기 ---------- */
 
-  var SWIPE_MIN = 60;      // 이만큼은 가로로 움직여야 넘긴다
-  var SWIPE_RATIO = 1.6;   // 세로보다 이만큼 더 가로여야 한다
-  var swipeTab = { live: false, x: 0, y: 0, onRow: false };
+  var LOCK_SLOP = 8;       // 이만큼 움직이면 가로인지 세로인지 정한다
+  var TURN_RATIO = 0.22;   // 화면 폭의 이만큼 끌면 넘어간다
+  var FLICK_SPEED = 0.45;  // px/ms. 짧게 튕겨도 넘어가게
+  var EDGE_PULL = 0.28;    // 양 끝에서는 이만큼만 딸려 온다 (고무줄)
+
+  var pagerDrag = {
+    live: false,
+    axis: 0,       // 0 아직, 1 가로(우리 것), -1 세로(스크롤)
+    x: 0, y: 0, dx: 0, w: 0,
+    lastX: 0, lastT: 0, v: 0,
+    onRow: false,
+    settling: false,
+    settleTimer: null
+  };
   var swallowClickUntil = 0;
 
   function canSwipeTab() {
@@ -2130,46 +2173,100 @@
     return true;
   }
 
+  /** 양 끝에서는 덜 딸려 오게 (더 갈 데가 없다는 걸 손으로 알려 준다) */
+  function resist(dx) {
+    var i = TABS.indexOf(ui.tab);
+    var atStart = i <= 0 && dx > 0;
+    var atEnd = i >= TABS.length - 1 && dx < 0;
+    return atStart || atEnd ? dx * EDGE_PULL : dx;
+  }
+
   function installTabSwipe(host) {
     if (!host) return;
 
     host.addEventListener("touchstart", function (ev) {
-      swipeTab.live = false;
+      pagerDrag.live = false;
+      pagerDrag.axis = 0;
       if (ev.touches.length !== 1 || !canSwipeTab()) return;
-      swipeTab.live = true;
-      swipeTab.x = ev.touches[0].clientX;
-      swipeTab.y = ev.touches[0].clientY;
+
+      var t = ev.touches[0];
+      pagerDrag.live = true;
+      pagerDrag.x = t.clientX;
+      pagerDrag.y = t.clientY;
+      pagerDrag.dx = 0;
+      pagerDrag.w = pagerWidth();
+      pagerDrag.lastX = t.clientX;
+      pagerDrag.lastT = Date.now();
+      pagerDrag.v = 0;
       // 지출 줄에서 시작한 가로 스와이프는 그 줄의 수정·삭제용이다
-      swipeTab.onRow = !!(ev.target.closest && ev.target.closest("[data-row]"));
+      pagerDrag.onRow = !!(ev.target.closest && ev.target.closest("[data-row]"));
     }, { passive: true });
 
     host.addEventListener("touchmove", function (ev) {
-      // 손가락이 하나 더 얹히면(확대 등) 우리 동작이 아니다
-      if (swipeTab.live && ev.touches.length !== 1) swipeTab.live = false;
-    }, { passive: true });
+      if (!pagerDrag.live) return;
+      if (ev.touches.length !== 1) {
+        // 손가락이 하나 더 얹히면(확대 등) 우리 동작이 아니다
+        pagerDrag.live = false;
+        paintPager(0, true);
+        return;
+      }
+
+      var t = ev.touches[0];
+      var dx = t.clientX - pagerDrag.x;
+      var dy = t.clientY - pagerDrag.y;
+
+      if (!pagerDrag.axis) {
+        if (Math.abs(dx) < LOCK_SLOP && Math.abs(dy) < LOCK_SLOP) return;
+        // 한 번 정하면 그 손짓이 끝날 때까지 바꾸지 않는다. 흔들려도 화면이 떨지 않게.
+        if (pagerDrag.onRow || Math.abs(dy) >= Math.abs(dx)) {
+          pagerDrag.axis = -1;
+          pagerDrag.live = false;
+          return;
+        }
+        pagerDrag.axis = 1;
+      }
+      if (pagerDrag.axis !== 1) return;
+
+      if (ev.cancelable) ev.preventDefault(); // 가로로 정했으면 세로 스크롤은 멈춘다
+
+      var now = Date.now();
+      if (now > pagerDrag.lastT) {
+        pagerDrag.v = (t.clientX - pagerDrag.lastX) / (now - pagerDrag.lastT);
+        pagerDrag.lastX = t.clientX;
+        pagerDrag.lastT = now;
+      }
+      pagerDrag.dx = resist(dx);
+      paintPager(pagerDrag.dx, false);
+    }, { passive: false });
 
     host.addEventListener("touchend", function (ev) {
-      var live = swipeTab.live && !swipeTab.onRow;
-      swipeTab.live = false;
-      if (!live || ev.touches.length) return;
-
-      var t = ev.changedTouches && ev.changedTouches[0];
-      if (!t) return;
-      var dx = t.clientX - swipeTab.x;
-      var dy = t.clientY - swipeTab.y;
-      if (Math.abs(dx) < SWIPE_MIN) return;
-      if (Math.abs(dx) < Math.abs(dy) * SWIPE_RATIO) return; // 세로에 가까우면 스크롤이다
-
-      // 왼쪽으로 밀면 오른쪽 탭, 오른쪽으로 밀면 왼쪽 탭
-      if (stepTab(dx < 0 ? 1 : -1)) {
-        // 같은 손짓의 끝을 브라우저가 탭으로 흘리는 경우만 막는다.
-        // 길게 잡으면 스와이프 직후의 진짜 탭까지 먹으므로 짧게 둔다.
-        swallowClickUntil = Date.now() + 150;
+      if (!pagerDrag.live || pagerDrag.axis !== 1) {
+        pagerDrag.live = false;
+        return;
       }
+      pagerDrag.live = false;
+      if (ev.touches.length) return;
+
+      var w = pagerDrag.w || pagerWidth();
+      // 화면 크기를 못 재는 환경(테스트 등)에서는 고정 거리로 판단한다
+      var need = w > 0 ? w * TURN_RATIO : 60;
+      var far = Math.abs(pagerDrag.dx) >= need;
+      var flick = Math.abs(pagerDrag.v) >= FLICK_SPEED && Math.abs(pagerDrag.dx) > LOCK_SLOP;
+
+      if ((far || flick) && stepTab(pagerDrag.dx < 0 ? 1 : -1)) {
+        // 같은 손짓의 끝을 브라우저가 탭으로 흘리는 경우만 막는다
+        swallowClickUntil = Date.now() + 150;
+      } else {
+        paintPager(0, true); // 덜 밀었으면 제자리로 미끄러진다
+      }
+      pagerDrag.dx = 0;
     }, { passive: true });
 
     host.addEventListener("touchcancel", function () {
-      swipeTab.live = false;
+      if (!pagerDrag.live) return;
+      pagerDrag.live = false;
+      pagerDrag.dx = 0;
+      paintPager(0, true);
     }, { passive: true });
   }
 
@@ -2584,6 +2681,7 @@
   window.addEventListener("resize", function () {
     scaleCache = null; // 화면이 바뀌었으니 배율을 다시 잰다
     render();
+    paintPager(0, false); // 폭이 달라졌으니 위치를 다시 잡는다
   });
 
   /* ---------- 시작 ---------- */
@@ -2607,7 +2705,7 @@
   MP.pullToRefresh.install({
     host: el("frame"),
     scroller: function () {
-      return appReady() && activeBudget() ? el("scroller") : null;
+      return appReady() && activeBudget() ? currentPage() : null;
     },
     canPull: function () {
       if (ui.addOpen || ui.menuOpen || ui.budgetOpen || ui.catsOpen || ui.shareOpen) return false;
