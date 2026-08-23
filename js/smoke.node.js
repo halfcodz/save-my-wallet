@@ -306,9 +306,16 @@ async function wait(ms) {
   const blur = (name) => el(name).dispatchEvent(new win.Event("blur"));
   const dialogOpen = () => visible("dialogOpen");
 
-  /* 손가락으로 미는 흉내. touchmove 를 거쳐야 가로/세로가 정해진다. */
+  /* 손가락으로 미는 흉내.
+     실제 타이머에 기대면 5ms 를 재우려다 20ms 가 되기도 해서 속도 판정이 흔들린다.
+     앱이 보는 시계를 직접 돌려서 언제 돌려도 같은 결과가 나오게 한다. */
+  let clock = null;
+  const realNow = win.Date.now.bind(win.Date);
+  win.Date.now = () => (clock === null ? realNow() : clock);
+
   const drag = async (dx, dy, from, slow) => {
     const node = from || currentPage();
+    const stepMs = slow ? 40 : 5; // 천천히 밀기 / 툭 튕기기
     const at = (x, y) => ({ clientX: x, clientY: y });
     const fire = (name, pt, touches) => {
       const ev = new win.Event(name, { bubbles: true, cancelable: true });
@@ -317,14 +324,16 @@ async function wait(ms) {
       node.dispatchEvent(ev);
     };
 
+    clock = realNow();
     fire("touchstart", at(200, 400), [at(200, 400)]);
     for (let k = 1; k <= 4; k++) {
+      clock += stepMs; // 손가락은 프레임마다 들어온다
       const pt = at(200 + (dx * k) / 4, 400 + (dy * k) / 4);
       fire("touchmove", pt, [pt]);
-      // 실제 손가락은 프레임마다 들어온다. 같은 밀리초에 몰아 보내면 속도를 잴 수 없다.
-      await wait(slow ? 40 : 5);
     }
+    clock += stepMs;
     fire("touchend", at(200 + dx, 400 + dy), []);
+    clock = null;
     await tick(8);
   };
   // 날짜는 오늘을 기준으로 잡는다. 고정 날짜를 쓰면 그 기간이 지나는 순간 깨진다.
@@ -978,7 +987,6 @@ async function wait(ms) {
   eq("세로에 가까우면 스크롤로 본다", currentTab(), "home");
 
   // 지출 줄에서 시작한 가로 스와이프는 그 줄의 것 (수정·삭제)
-  await wait(200); // 스와이프 직후의 클릭 차단이 풀린 뒤에
   click('[data-act="goHistory"]');
   await tick(6);
   const row = doc.querySelector("[data-row]");

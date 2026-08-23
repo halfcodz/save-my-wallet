@@ -805,17 +805,6 @@
     }
   }
 
-  /** 브라우저가 새 마크업의 자리를 잡은 뒤에 재야 정확하다 */
-  function afterFrame(fn) {
-    if (typeof window.requestAnimationFrame === "function") {
-      window.requestAnimationFrame(function () {
-        window.requestAnimationFrame(fn);
-      });
-      return;
-    }
-    setTimeout(fn, 16);
-  }
-
   function clearDayZoom() {
     ["daySheet", "dayBody", "dayLayer"].forEach(function (name) {
       var node = el(name);
@@ -827,18 +816,25 @@
     });
   }
 
-  /** 카드를 그 칸 위에 겹쳐 놓는 변형 */
-  function shrinkOnto(card, from) {
+  /**
+   * 카드를 그 날짜 박스 자리에 딱 맞게 접어 놓는 변형.
+   * 가로·세로를 따로 줄여서 박스와 같은 모양이 되게 한다.
+   * 그래야 커질 때 '그 상자가 펼쳐진다'로 보인다. (같은 비율로 줄이면 그냥 확대다)
+   * 눌린 동안에는 내용이 아직 안 보이므로 글자가 찌그러질 일은 없다.
+   */
+  function unfoldFrom(card, from) {
     var to = card.getBoundingClientRect();
     if (!from || !to.width || !to.height) return null;
-    var s = Math.min(1, Math.max(0.08, from.width / to.width));
+    var sx = Math.min(1, Math.max(0.04, from.width / to.width));
+    var sy = Math.min(1, Math.max(0.04, from.height / to.height));
     return (
       "translate(" + (from.left - to.left).toFixed(1) + "px," +
-      (from.top - to.top).toFixed(1) + "px) scale(" + s.toFixed(4) + ")"
+      (from.top - to.top).toFixed(1) + "px) scale(" +
+      sx.toFixed(4) + "," + sy.toFixed(4) + ")"
     );
   }
 
-  /** 누른 칸에서 카드가 부드럽게 자라나고, 다 자라면 내용이 드러난다 */
+  /** 누른 날짜 박스에서 카드가 펼쳐지고, 다 펼쳐지면 내용이 드러난다 */
   function zoomDayIn() {
     var card = el("daySheet");
     var body = el("dayBody");
@@ -846,34 +842,33 @@
     clearTimeout(dayZoom.timer);
     if (!card || reduceMotion()) return;
 
+    /* 여기서 바로 잰다.
+       방금 render() 로 카드가 자리를 잡았고, 재는 순간 브라우저가 배치를 확정한다.
+       한 프레임이라도 미루면 '다 커진 카드'가 먼저 한 번 번쩍이고 나서 접힌다. */
+    var start = unfoldFrom(card, ui.dayFrom);
+    if (!start) return; // 시작 자리를 모르면 그냥 뜬다
+
+    card.style.transformOrigin = "top left";
+    card.style.transition = "none";
+    card.style.transform = start;
     if (layer) { layer.style.transition = "none"; layer.style.opacity = "0"; }
     if (body) { body.style.transition = "none"; body.style.opacity = "0"; }
 
-    afterFrame(function () {
-      if (!ui.dayOpen) return;
-      var start = shrinkOnto(card, ui.dayFrom);
-      if (!start) {
-        clearDayZoom();
-        return;
-      }
-      card.style.transition = "none";
-      card.style.transformOrigin = "top left";
-      card.style.transform = start;
-      if (card.offsetWidth) {
-        /* 값을 읽어 브라우저가 시작 위치를 확정하게 한다 */
-      }
-      card.style.transition = "transform .34s cubic-bezier(.22,.9,.28,1)";
-      card.style.transform = "none";
-      if (layer) {
-        layer.style.transition = "opacity .26s ease-out";
-        layer.style.opacity = "1";
-      }
-      if (body) {
-        // 다 자란 뒤에 내용이 떠오르게 조금 늦춘다
-        body.style.transition = "opacity .22s ease-out .12s";
-        body.style.opacity = "1";
-      }
-    });
+    if (card.offsetWidth) {
+      /* 값을 읽어 접힌 상태를 시작점으로 확정시킨다 */
+    }
+
+    card.style.transition = "transform .36s cubic-bezier(.2,.9,.25,1)";
+    card.style.transform = "none";
+    if (layer) {
+      layer.style.transition = "opacity .28s ease-out";
+      layer.style.opacity = "1";
+    }
+    if (body) {
+      // 다 펼쳐진 뒤에 내용이 떠오르게 조금 늦춘다
+      body.style.transition = "opacity .2s ease-out .16s";
+      body.style.opacity = "1";
+    }
   }
 
   /** 다시 그 칸으로 줄어들며 닫힌다 */
@@ -883,23 +878,23 @@
     var layer = el("dayLayer");
     clearTimeout(dayZoom.timer);
 
-    var back = card && !reduceMotion() ? shrinkOnto(card, ui.dayFrom) : null;
+    var back = card && !reduceMotion() ? unfoldFrom(card, ui.dayFrom) : null;
     if (!back) {
       clearDayZoom();
       done();
       return;
     }
 
-    card.style.transition = "transform .24s cubic-bezier(.4,0,.7,1)";
+    card.style.transition = "transform .26s cubic-bezier(.4,0,.7,1)";
     card.style.transformOrigin = "top left";
     card.style.transform = back;
-    if (body) { body.style.transition = "opacity .12s ease-in"; body.style.opacity = "0"; }
-    if (layer) { layer.style.transition = "opacity .24s ease-in"; layer.style.opacity = "0"; }
+    if (body) { body.style.transition = "opacity .1s ease-in"; body.style.opacity = "0"; }
+    if (layer) { layer.style.transition = "opacity .26s ease-in"; layer.style.opacity = "0"; }
 
     dayZoom.timer = setTimeout(function () {
       clearDayZoom();
       done();
-    }, 250);
+    }, 270);
   }
 
   /** 달력에서 고른 날짜의 내역. 여기서도 고치고 지울 수 있다. */
@@ -956,10 +951,12 @@
   function dayGroupHTML(g, view) {
     return (
       '<div style="padding-bottom:1.125rem">' +
-        '<div style="display:flex;justify-content:space-between;align-items:baseline;padding:0.625rem 0 0.25rem">' +
-          '<div style="font-size:0.75rem;font-weight:700;color:var(--g3)">' + esc(calc.dayLabel(g.date, today)) + "</div>" +
-          '<div style="font-size:0.75rem;color:var(--g3)">' + esc(calc.formatWon(g.sum)) + "원</div>" +
-        "</div>" +
+        // 날짜 머리도 하나의 상자다. 누르면 여기서 그날 카드가 펼쳐진다.
+        '<button data-act="openDay" data-date="' + esc(g.date) +
+          '" style="display:flex;justify-content:space-between;align-items:baseline;width:100%;border:none;background:none;padding:0.625rem 0 0.25rem;text-align:left">' +
+          '<span style="font-size:0.75rem;font-weight:700;color:var(--g3)">' + esc(calc.dayLabel(g.date, today)) + "</span>" +
+          '<span style="font-size:0.75rem;color:var(--g3)">' + esc(calc.formatWon(g.sum)) + "원</span>" +
+        "</button>" +
         rowsHTML(g, view) +
       "</div>"
     );
@@ -969,13 +966,14 @@
   function todayGroupHTML(g, view) {
     return (
       '<div style="border:1px solid var(--fg);border-radius:1rem;padding:2px 0.875rem 0.625rem;margin:2px 0 1.25rem">' +
-        '<div style="display:flex;justify-content:space-between;align-items:baseline;padding:0.8125rem 0 0.4375rem">' +
-          '<div style="font-size:0.875rem;font-weight:800;letter-spacing:-.01em">오늘' +
+        '<button data-act="openDay" data-date="' + esc(g.date) +
+          '" style="display:flex;justify-content:space-between;align-items:baseline;width:100%;border:none;background:none;padding:0.8125rem 0 0.4375rem;text-align:left">' +
+          '<span style="font-size:0.875rem;font-weight:800;letter-spacing:-.01em">오늘' +
             '<span style="font-size:0.6875rem;font-weight:600;color:var(--g3);margin-left:0.4375rem">' +
-              esc(calc.dayLabel(g.date, null)) + "</span></div>" +
-          '<div style="font-size:1.1875rem;font-weight:800;letter-spacing:-.03em">' + esc(calc.formatWon(g.sum)) +
-            '<span style="font-size:0.75rem;font-weight:600;color:var(--g3);margin-left:2px">원</span></div>' +
-        "</div>" +
+              esc(calc.dayLabel(g.date, null)) + "</span></span>" +
+          '<span style="font-size:1.1875rem;font-weight:800;letter-spacing:-.03em">' + esc(calc.formatWon(g.sum)) +
+            '<span style="font-size:0.75rem;font-weight:600;color:var(--g3);margin-left:2px">원</span></span>' +
+        "</button>" +
         rowsHTML(g, view) +
         '<div style="font-size:0.6875rem;color:var(--g3);padding-top:0.5625rem">' + g.items.length + "건</div>" +
       "</div>"
