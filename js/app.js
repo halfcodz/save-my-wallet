@@ -1577,6 +1577,7 @@
       );
     },
     signOut: function () {
+      closeSheets();
       ask(
         {
           title: "로그아웃할까요?",
@@ -1584,8 +1585,6 @@
           ok: "로그아웃"
         },
         function () {
-          ui.menuOpen = false;
-          render();
           auth.signOut().catch(function (err) {
             snack(auth.messageOf(err), null);
             render();
@@ -1594,6 +1593,7 @@
       );
     },
     renameMe: function () {
+      closeSheets(); // 확인창 뒤에 메뉴가 열린 채로 남지 않게
       ask(
         {
           title: "이름 바꾸기",
@@ -1769,16 +1769,9 @@
     },
 
     /* --- 탭 --- */
-    goHome: function () { ui.tab = "home"; ui.swipedId = null; ui.selMode = false; ui.selected = []; render(); },
-    goHistory: function () {
-      ui.tab = "history";
-      ui.selMode = false; ui.selected = []; ui.swipedId = null;
-      render();
-    },
-    goSummary: function () {
-      ui.tab = "summary";
-      render();
-    },
+    goHome: function () { setTab("home"); },
+    goHistory: function () { setTab("history"); },
+    goSummary: function () { setTab("summary"); },
     /* --- 달력 --- */
     toggleCalendar: function () {
       ui.historyView = ui.historyView === "calendar" ? "list" : "calendar";
@@ -2081,6 +2074,105 @@
     }
   };
 
+  /* ---------- 탭 이동 ---------- */
+
+  var TABS = ["home", "history", "summary"];
+
+  /**
+   * 탭을 바꾼다. 어느 쪽에서 넘어왔는지 짧게 보여 준다.
+   * 탭을 눌러서 오든 스와이프로 오든 같은 길을 쓴다.
+   */
+  function setTab(name) {
+    if (ui.tab === name) return;
+    var step = TABS.indexOf(name) - TABS.indexOf(ui.tab);
+    ui.tab = name;
+    ui.swipedId = null;
+    ui.selMode = false;
+    ui.selected = [];
+    slideTab(step);
+    render();
+  }
+
+  /** 옆 탭으로. 양 끝에서는 넘어가지 않는다 (돌아 나오지 않는다) */
+  function stepTab(step) {
+    var i = TABS.indexOf(ui.tab);
+    if (i < 0) return false;
+    var next = i + step;
+    if (next < 0 || next >= TABS.length) return false;
+    setTab(TABS[next]);
+    return true;
+  }
+
+  function slideTab(step) {
+    var node = el("scroller");
+    if (!node || !step) return;
+    node.classList.remove("mm-in-left", "mm-in-right");
+    // 같은 방향으로 연달아 넘겨도 애니메이션이 다시 돌게 한 번 재계산시킨다
+    if (node.offsetWidth) {
+      /* 값을 읽는 것 자체가 목적이다 */
+    }
+    node.classList.add(step > 0 ? "mm-in-right" : "mm-in-left");
+  }
+
+  /* ---------- 좌우 스와이프로 탭 넘기기 ---------- */
+
+  var SWIPE_MIN = 60;      // 이만큼은 가로로 움직여야 넘긴다
+  var SWIPE_RATIO = 1.6;   // 세로보다 이만큼 더 가로여야 한다
+  var swipeTab = { live: false, x: 0, y: 0, onRow: false };
+  var swallowClickUntil = 0;
+
+  function canSwipeTab() {
+    if (!appReady() || !activeBudget()) return false;
+    if (ui.addOpen || ui.menuOpen || ui.budgetOpen || ui.catsOpen || ui.shareOpen) return false;
+    if (ui.switcherOpen || ui.personalOpen || ui.dayOpen || ui.dialog) return false;
+    if (ui.selMode) return false;  // 고르는 중에는 화면을 바꾸지 않는다
+    if (ui.swipedId) return false; // 열려 있는 줄부터 닫는 게 먼저다
+    return true;
+  }
+
+  function installTabSwipe(host) {
+    if (!host) return;
+
+    host.addEventListener("touchstart", function (ev) {
+      swipeTab.live = false;
+      if (ev.touches.length !== 1 || !canSwipeTab()) return;
+      swipeTab.live = true;
+      swipeTab.x = ev.touches[0].clientX;
+      swipeTab.y = ev.touches[0].clientY;
+      // 지출 줄에서 시작한 가로 스와이프는 그 줄의 수정·삭제용이다
+      swipeTab.onRow = !!(ev.target.closest && ev.target.closest("[data-row]"));
+    }, { passive: true });
+
+    host.addEventListener("touchmove", function (ev) {
+      // 손가락이 하나 더 얹히면(확대 등) 우리 동작이 아니다
+      if (swipeTab.live && ev.touches.length !== 1) swipeTab.live = false;
+    }, { passive: true });
+
+    host.addEventListener("touchend", function (ev) {
+      var live = swipeTab.live && !swipeTab.onRow;
+      swipeTab.live = false;
+      if (!live || ev.touches.length) return;
+
+      var t = ev.changedTouches && ev.changedTouches[0];
+      if (!t) return;
+      var dx = t.clientX - swipeTab.x;
+      var dy = t.clientY - swipeTab.y;
+      if (Math.abs(dx) < SWIPE_MIN) return;
+      if (Math.abs(dx) < Math.abs(dy) * SWIPE_RATIO) return; // 세로에 가까우면 스크롤이다
+
+      // 왼쪽으로 밀면 오른쪽 탭, 오른쪽으로 밀면 왼쪽 탭
+      if (stepTab(dx < 0 ? 1 : -1)) {
+        // 같은 손짓의 끝을 브라우저가 탭으로 흘리는 경우만 막는다.
+        // 길게 잡으면 스와이프 직후의 진짜 탭까지 먹으므로 짧게 둔다.
+        swallowClickUntil = Date.now() + 150;
+      }
+    }, { passive: true });
+
+    host.addEventListener("touchcancel", function () {
+      swipeTab.live = false;
+    }, { passive: true });
+  }
+
   /** 시트끼리 겹쳐 열리지 않게 한 번에 정리한다 */
   function closeSheets() {
     ui.menuOpen = false;
@@ -2157,6 +2249,11 @@
   }
 
   document.addEventListener("click", function (ev) {
+    // 방금 화면을 넘겼다면 그 손짓의 끝을 클릭으로 받지 않는다
+    if (Date.now() < swallowClickUntil) {
+      ev.preventDefault();
+      return;
+    }
     var node = ev.target.closest("[data-act]");
     if (!node) return;
     if (node.disabled) return;
@@ -2502,6 +2599,9 @@
 
   /* 오프라인 지원 + 새 버전 감지. file://로 열었을 땐 서비스 워커를 쓸 수 없으므로 건너뛴다. */
   MP.updater.install();
+
+  /* 홈 · 내역 · 요약을 좌우로 넘긴다 */
+  installTabSwipe(el("frame"));
 
   /* 웹앱에는 주소창이 없다 — 위에서 아래로 당기면 새로고침 */
   MP.pullToRefresh.install({

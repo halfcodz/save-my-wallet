@@ -305,6 +305,38 @@ async function wait(ms) {
   // blur 는 버블링하지 않지만, document 의 캡처 리스너에는 잡힌다
   const blur = (name) => el(name).dispatchEvent(new win.Event("blur"));
   const dialogOpen = () => visible("dialogOpen");
+
+  /* 손가락으로 미는 흉내. from 을 주면 그 요소에서 시작한다. */
+  const drag = async (dx, dy, from) => {
+    const node = from || el("scroller");
+    const at = (x, y) => ({ clientX: x, clientY: y });
+    const start = new win.Event("touchstart", { bubbles: true });
+    start.touches = [at(200, 400)];
+    start.changedTouches = start.touches;
+    node.dispatchEvent(start);
+
+    const end = new win.Event("touchend", { bubbles: true });
+    end.touches = [];
+    end.changedTouches = [at(200 + dx, 400 + dy)];
+    node.dispatchEvent(end);
+    await tick(6);
+  };
+  // 날짜는 오늘을 기준으로 잡는다. 고정 날짜를 쓰면 그 기간이 지나는 순간 깨진다.
+  const C = win.MP.calc;
+  const todayIso = C.todayISO();
+  const tripStart = C.addDays(todayIso, -3);
+  const tripEnd = C.addDays(todayIso, 1);
+  const tripPeriod = C.periodLabel({ startDate: tripStart, endDate: tripEnd });
+  const month = C.monthBounds(todayIso);
+  const monthPeriod = C.periodLabel({ startDate: month.start, endDate: month.end });
+
+  const currentTab = () =>
+    visible("isHome") ? "home"
+    : visible("isHistory") ? "history"
+    : visible("isSummary") ? "summary"
+    : "?";
+  const swipeLeft = (from) => drag(-90, 0, from);   // 다음 탭
+  const swipeRight = (from) => drag(90, 0, from);   // 이전 탭
   const acceptDialog = async () => {
     click('[data-act="dialogOk"]');
     await tick(8);
@@ -405,8 +437,8 @@ async function wait(ms) {
   ok("예산 시트가 열린다", visible("budgetOpen"));
 
   type("nbName", "부산 여행");
-  type("nbStart", "2026-08-20");
-  type("nbEnd", "2026-08-23");
+  type("nbStart", tripStart);
+  type("nbEnd", tripEnd);
   type("nbTotal", "400000");
   await tick(2);
   ok("입력이 유효하면 만들기 버튼이 켜진다", el("createBudget").disabled === false);
@@ -477,7 +509,7 @@ async function wait(ms) {
   ok("메인 제목을 누르면 예산 고르기가 열린다", visible("switcherOpen"));
   ok("지금 예산에 체크가 있다", el("switcherList").textContent.includes("✓"));
   ok("예산 이름이 나온다", el("switcherList").textContent.includes("부산 여행"));
-  ok("기간과 쓴 금액도 같이 보인다", el("switcherList").textContent.includes("8/20"));
+  ok("기간과 쓴 금액도 같이 보인다", el("switcherList").textContent.includes(tripPeriod));
   ok("나의 가계부 구역이 있다", el("switcherList").textContent.includes("나의 가계부"));
   ok("아직 없으면 만들기를 권한다", el("switcherList").textContent.includes("나의 가계부 만들기"));
   ok("여행 구역으로 나뉜다", el("switcherList").textContent.includes("여행"));
@@ -511,8 +543,8 @@ async function wait(ms) {
   click('[data-act="newBudget"]');
   await tick(4);
   type("nbName", "생활비");
-  type("nbStart", "2026-08-01");
-  type("nbEnd", "2026-08-31");
+  type("nbStart", month.start);
+  type("nbEnd", month.end);
   type("nbTotal", "500000");
   await tick(2);
   click('[data-act="createBudget"]');
@@ -535,7 +567,7 @@ async function wait(ms) {
   await tick(6);
   ok("내역 상단에 예산 칩 줄이 없다", !doc.querySelector('[data-el="budgetChips"]'));
   ok("내역 상단에 예산 이름이 없다", !txt("viewPeriodText").includes("부산 여행"));
-  eq("기간만 남는다", txt("viewPeriodText"), "8/20–8/23");
+  eq("기간만 남는다", txt("viewPeriodText"), tripPeriod);
   const todayCard = doc.querySelector('[data-el="groups"] > div');
   ok("오늘이 첫 묶음이다", todayCard.textContent.includes("오늘"));
   ok("오늘 묶음은 테두리로 강조된다", todayCard.getAttribute("style").includes("border:1px solid var(--fg)"));
@@ -884,6 +916,61 @@ async function wait(ms) {
     .replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
   ok("코드에도 confirm/alert/prompt 호출이 없다",
     !/(^|[^.\w])(confirm|alert|prompt)\s*\(/.test(appJs));
+
+  /* --- 16. 좌우 스와이프로 탭 넘기기 --- */
+  click('[data-act="goHome"]');
+  await tick(5);
+  eq("홈에서 시작", currentTab(), "home");
+
+  await swipeRight();
+  eq("홈에서 오른쪽으로 밀어도 그대로 (앞이 없다)", currentTab(), "home");
+
+  await swipeLeft();
+  eq("홈에서 왼쪽으로 밀면 내역", currentTab(), "history");
+  ok("내역 화면이 실제로 보인다", visible("isHistory"));
+  ok("오른쪽에서 들어온 표시", el("scroller").classList.contains("mm-in-right"));
+
+  await swipeLeft();
+  eq("내역에서 왼쪽으로 밀면 요약", currentTab(), "summary");
+  ok("요약 화면이 실제로 보인다", visible("isSummary"));
+
+  await swipeLeft();
+  eq("요약에서 왼쪽으로 더 밀어도 그대로 (뒤가 없다)", currentTab(), "summary");
+
+  await swipeRight();
+  eq("요약에서 오른쪽으로 밀면 내역", currentTab(), "history");
+  ok("왼쪽에서 들어온 표시", el("scroller").classList.contains("mm-in-left"));
+
+  await swipeRight();
+  eq("내역에서 오른쪽으로 밀면 홈", currentTab(), "home");
+
+  // 너무 짧거나 세로에 가까우면 넘기지 않는다
+  await drag(-30, 0);
+  eq("살짝 민 것은 무시", currentTab(), "home");
+  await drag(-90, 120);
+  eq("세로에 가까우면 스크롤로 본다", currentTab(), "home");
+
+  // 지출 줄에서 시작한 가로 스와이프는 그 줄의 것 (수정·삭제)
+  await wait(200); // 스와이프 직후의 클릭 차단이 풀린 뒤에
+  click('[data-act="goHistory"]');
+  await tick(6);
+  const row = doc.querySelector("[data-row]");
+  ok("내역에 지출 줄이 있다", !!row);
+  await swipeLeft(row);
+  eq("줄에서 시작하면 탭은 그대로", currentTab(), "history");
+
+  // 확인창이 떠 있으면 넘기지 않는다
+  click('[data-act="goHome"]');
+  await tick(5);
+  click('[data-act="openMenu"]');
+  await tick(3);
+  click('[data-act="renameMe"]');
+  await tick(4);
+  ok("확인창이 떠 있다", dialogOpen());
+  await swipeLeft();
+  eq("확인창 위에서는 넘기지 않는다", currentTab(), "home");
+  click('[data-act="dialogCancel"]');
+  await tick(5);
 
   report();
 

@@ -79,6 +79,18 @@ html[data-mm="dark"] {
 .mm-cal-dow { display: grid; grid-template-columns: repeat(7, 1fr); padding: 0 0 0.375rem; }
 .mm-cal-dow > div { text-align: center; font-size: 0.6875rem; color: var(--g3); }
 
+/* ---- 탭 좌우 스와이프 ----
+   화면을 통째로 끌고 다니지 않고, 바뀐 뒤에 방향만 짧게 보여 준다.
+   어느 쪽으로 넘어왔는지 알 수 있으면 충분하다. */
+@keyframes mmInRight { from { transform: translateX(1.25rem); opacity: .3 } to { transform: none; opacity: 1 } }
+@keyframes mmInLeft  { from { transform: translateX(-1.25rem); opacity: .3 } to { transform: none; opacity: 1 } }
+.mm-in-right { animation: mmInRight .19s ease-out; }
+.mm-in-left  { animation: mmInLeft .19s ease-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  .mm-in-right, .mm-in-left { animation: none; }
+}
+
 /* ---- 아이폰 상태바(다이나믹 아일랜드) 자리 ---- */
 
 /* status-bar-style을 black-translucent로 두면 화면이 상태바 밑까지 올라온다.
