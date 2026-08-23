@@ -28,9 +28,11 @@
     menuOpen: false,
     switcherOpen: false,
     personalOpen: false,
-    historyView: "list",   // "list" | "calendar"
+    historyView: "calendar", // "calendar" | "list" — 내역은 달력으로 먼저 보여준다
     calMonth: today,        // 달력이 보고 있는 달
-    dayOpen: null,          // 팝업으로 연 날짜
+    dayOpen: null,          // 카드로 연 날짜
+    dayFrom: null,          // 그 날짜 칸의 자리 (여기서 카드가 자라난다)
+    calBudgetId: null,      // 달력이 맞춰 둔 예산
     dialog: null,           // 앱 안에서 뜨는 확인창
 
     snack: null,
@@ -670,6 +672,8 @@
     text("viewTotalText", calc.formatWon(view.totalAmount));
     text("selCountText", ui.selected.length + "개 선택됨");
 
+    ensureCalMonth(view);
+
     var listMode = ui.historyView === "list";
     show("viewEmpty", list.length === 0 && listMode);
     show("summaryEmpty", list.length === 0);
@@ -694,6 +698,17 @@
         .join("")
     );
     paintRows();
+  }
+
+  /**
+   * 달력이 볼 달을 정한다.
+   * 예산을 바꾸면 그 기간으로 옮겨 주되, 사용자가 넘겨 둔 달은 건드리지 않는다.
+   */
+  function ensureCalMonth(view) {
+    if (!view || ui.calBudgetId === view.id) return;
+    ui.calBudgetId = view.id;
+    var period = calc.effectiveBudget(view, today);
+    ui.calMonth = today < period.startDate || today > period.endDate ? period.startDate : today;
   }
 
   function calToggleStyle() {
@@ -763,6 +778,122 @@
         })
         .join("")
     );
+  }
+
+  /* ---------- 날짜 칸이 카드로 자라나는 움직임 ---------- */
+
+  var dayZoom = { timer: null };
+
+  function rectOf(node) {
+    if (!node || !node.getBoundingClientRect) return null;
+    var r = node.getBoundingClientRect();
+    if (!r.width || !r.height) return null;
+    return { left: r.left, top: r.top, width: r.width, height: r.height };
+  }
+
+  function reduceMotion() {
+    try {
+      return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /** 브라우저가 새 마크업의 자리를 잡은 뒤에 재야 정확하다 */
+  function afterFrame(fn) {
+    if (typeof window.requestAnimationFrame === "function") {
+      window.requestAnimationFrame(function () {
+        window.requestAnimationFrame(fn);
+      });
+      return;
+    }
+    setTimeout(fn, 16);
+  }
+
+  function clearDayZoom() {
+    ["daySheet", "dayBody", "dayLayer"].forEach(function (name) {
+      var node = el(name);
+      if (!node) return;
+      node.style.transition = "";
+      node.style.transform = "";
+      node.style.transformOrigin = "";
+      node.style.opacity = "";
+    });
+  }
+
+  /** 카드를 그 칸 위에 겹쳐 놓는 변형 */
+  function shrinkOnto(card, from) {
+    var to = card.getBoundingClientRect();
+    if (!from || !to.width || !to.height) return null;
+    var s = Math.min(1, Math.max(0.08, from.width / to.width));
+    return (
+      "translate(" + (from.left - to.left).toFixed(1) + "px," +
+      (from.top - to.top).toFixed(1) + "px) scale(" + s.toFixed(4) + ")"
+    );
+  }
+
+  /** 누른 칸에서 카드가 부드럽게 자라나고, 다 자라면 내용이 드러난다 */
+  function zoomDayIn() {
+    var card = el("daySheet");
+    var body = el("dayBody");
+    var layer = el("dayLayer");
+    clearTimeout(dayZoom.timer);
+    if (!card || reduceMotion()) return;
+
+    if (layer) { layer.style.transition = "none"; layer.style.opacity = "0"; }
+    if (body) { body.style.transition = "none"; body.style.opacity = "0"; }
+
+    afterFrame(function () {
+      if (!ui.dayOpen) return;
+      var start = shrinkOnto(card, ui.dayFrom);
+      if (!start) {
+        clearDayZoom();
+        return;
+      }
+      card.style.transition = "none";
+      card.style.transformOrigin = "top left";
+      card.style.transform = start;
+      if (card.offsetWidth) {
+        /* 값을 읽어 브라우저가 시작 위치를 확정하게 한다 */
+      }
+      card.style.transition = "transform .34s cubic-bezier(.22,.9,.28,1)";
+      card.style.transform = "none";
+      if (layer) {
+        layer.style.transition = "opacity .26s ease-out";
+        layer.style.opacity = "1";
+      }
+      if (body) {
+        // 다 자란 뒤에 내용이 떠오르게 조금 늦춘다
+        body.style.transition = "opacity .22s ease-out .12s";
+        body.style.opacity = "1";
+      }
+    });
+  }
+
+  /** 다시 그 칸으로 줄어들며 닫힌다 */
+  function zoomDayOut(done) {
+    var card = el("daySheet");
+    var body = el("dayBody");
+    var layer = el("dayLayer");
+    clearTimeout(dayZoom.timer);
+
+    var back = card && !reduceMotion() ? shrinkOnto(card, ui.dayFrom) : null;
+    if (!back) {
+      clearDayZoom();
+      done();
+      return;
+    }
+
+    card.style.transition = "transform .24s cubic-bezier(.4,0,.7,1)";
+    card.style.transformOrigin = "top left";
+    card.style.transform = back;
+    if (body) { body.style.transition = "opacity .12s ease-in"; body.style.opacity = "0"; }
+    if (layer) { layer.style.transition = "opacity .24s ease-in"; layer.style.opacity = "0"; }
+
+    dayZoom.timer = setTimeout(function () {
+      clearDayZoom();
+      done();
+    }, 250);
   }
 
   /** 달력에서 고른 날짜의 내역. 여기서도 고치고 지울 수 있다. */
@@ -1314,7 +1445,9 @@
   function editExpense(id) {
     var e = findExpense(id);
     if (!e) return;
+    clearDayZoom();
     ui.dayOpen = null;
+    ui.dayFrom = null;
     ui.draft = {
       amount: e.amount,
       categoryId: e.categoryId,
@@ -1782,13 +1915,6 @@
       ui.selMode = false;
       ui.selected = [];
       ui.swipedId = null;
-      // 달력을 열 때는 오늘이 있는 달부터 (기간 밖이면 예산이 시작한 달)
-      if (ui.historyView === "calendar") {
-        var view = viewBudget();
-        var period = view ? calc.effectiveBudget(view, today) : null;
-        ui.calMonth =
-          period && (today < period.startDate || today > period.endDate) ? period.startDate : today;
-      }
       render();
     },
     calPrev: function () {
@@ -1801,12 +1927,20 @@
     },
     openDay: function (node) {
       ui.dayOpen = node.getAttribute("data-date");
+      ui.dayFrom = rectOf(node); // 이 칸에서 카드가 자라난다
       hideSnack();
       render();
+      zoomDayIn();
     },
     closeDay: function () {
-      ui.dayOpen = null;
-      render();
+      zoomDayOut(function () {
+        ui.dayOpen = null;
+        ui.dayFrom = null;
+        render();
+      });
+    },
+    dayNoop: function () {
+      /* 카드 안을 눌렀을 때 뒤 배경의 '닫기'로 새지 않게 */
     },
     /** 팝업에서 그 날짜로 바로 지출을 추가한다 */
     addOnDay: function () {
@@ -2278,7 +2412,9 @@
     ui.shareOpen = false;
     ui.catsOpen = false;
     ui.personalOpen = false;
+    clearDayZoom();
     ui.dayOpen = null;
+    ui.dayFrom = null;
   }
 
   /**

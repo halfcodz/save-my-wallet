@@ -375,15 +375,18 @@
     </div>
   </div>
 
-  <!-- ===== 달력에서 고른 날짜의 내역 ===== -->
-  <div data-show="dayOpen" data-act="closeDay" style="position:absolute;inset:0;z-index:84;background:rgba(0,0,0,.32);display:flex;flex-direction:column;justify-content:flex-end">
-    <div data-el="daySheet" style="background:var(--bg);border-top-left-radius:1.125rem;border-top-right-radius:1.125rem;padding:0 0.5rem max(1.125rem,env(safe-area-inset-bottom));max-height:78%;display:flex;flex-direction:column;animation:mmUp .18s ease-out">
-      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:0.75rem;padding:1.125rem 0.75rem 0.625rem;flex:0 0 auto">
-        <div data-el="dayTitle" style="font-size:0.9375rem;font-weight:800;letter-spacing:-.01em"></div>
-        <div data-el="daySum" style="font-size:0.9375rem;font-weight:800"></div>
+  <!-- ===== 달력에서 고른 날짜의 내역 =====
+       누른 칸에서 이 카드가 자라난다 (app.js 의 zoomDayIn) -->
+  <div data-show="dayOpen" data-el="dayLayer" data-act="closeDay" style="position:absolute;inset:0;z-index:84;background:rgba(0,0,0,.34);display:flex;align-items:center;justify-content:center;padding:1.25rem">
+    <div data-el="daySheet" data-act="dayNoop" style="width:100%;max-width:21rem;max-height:74%;background:var(--bg);border-radius:1.125rem;box-shadow:0 1rem 2.5rem rgba(0,0,0,.24);display:flex;flex-direction:column;overflow:hidden">
+      <div data-el="dayBody" style="display:flex;flex-direction:column;min-height:0;flex:1;padding:0 0.75rem 0.75rem">
+        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:0.75rem;padding:1.125rem 0.5rem 0.625rem;flex:0 0 auto">
+          <div data-el="dayTitle" style="font-size:0.9375rem;font-weight:800;letter-spacing:-.01em"></div>
+          <div data-el="daySum" style="font-size:0.9375rem;font-weight:800"></div>
+        </div>
+        <div data-el="dayList" style="overflow-y:auto;flex:1;min-height:0;padding:0 0.5rem"></div>
+        <button data-act="addOnDay" style="flex:0 0 auto;margin:0.75rem 0.5rem 0.25rem;height:3rem;border:none;border-radius:0.8125rem;background:var(--fg);color:var(--bg);font-size:0.9375rem;font-weight:700">이 날짜에 추가</button>
       </div>
-      <div data-el="dayList" style="overflow-y:auto;flex:1;min-height:0;padding:0 0.75rem"></div>
-      <button data-act="addOnDay" style="flex:0 0 auto;margin:0.75rem 0.75rem 0.25rem;height:3rem;border:none;border-radius:0.8125rem;background:var(--fg);color:var(--bg);font-size:0.9375rem;font-weight:700">이 날짜에 추가</button>
     </div>
   </div>
 

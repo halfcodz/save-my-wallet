@@ -576,15 +576,23 @@ async function wait(ms) {
   // 내역 화면: 예산 칩 줄은 사라지고, 오늘이 카드로 강조된다
   click('[data-act="goHistory"]');
   await tick(6);
+  ok("내역은 달력으로 먼저 열린다", visible("calMode") && !visible("listMode"));
   ok("내역 상단에 예산 칩 줄이 없다", !doc.querySelector('[data-el="budgetChips"]'));
   ok("내역 상단에 예산 이름이 없다", !txt("viewPeriodText").includes("부산 여행"));
   eq("기간만 남는다", txt("viewPeriodText"), tripPeriod);
+
+  // 리스트로 바꿔서 오늘 강조를 확인한다
+  click('[data-act="toggleCalendar"]');
+  await tick(6);
+  ok("리스트로 바꿀 수 있다", visible("listMode") && !visible("calMode"));
   const todayCard = doc.querySelector('[data-el="groups"] > div');
   ok("오늘이 첫 묶음이다", todayCard.textContent.includes("오늘"));
   ok("오늘 묶음은 테두리로 강조된다", todayCard.getAttribute("style").includes("border:1px solid var(--fg)"));
   ok("오늘 합계가 크게 보인다", todayCard.textContent.includes("30,000"));
   ok("오늘 몇 건인지 보인다", todayCard.textContent.includes("1건"));
   ok("내역 전체 삭제 버튼은 없앴다 (꾹 눌러 선택으로 대체)", !doc.querySelector('[data-act="deleteAllInHistory"]'));
+  click('[data-act="toggleCalendar"]'); // 달력으로 되돌린다
+  await tick(6);
   click('[data-act="goHome"]');
   await tick(4);
 
@@ -756,13 +764,9 @@ async function wait(ms) {
   await tick(6);
   eq("내역 탭이 열린다", currentTab(), "history");
   eq("합계", txt("viewSpentText"), "120,000");
-  ok("작성자 이름이 줄마다 보인다", el("groups").textContent.includes("예은"));
 
   // 달력 보기
-  ok("기본은 리스트", visible("listMode") && !visible("calMode"));
-  click('[data-act="toggleCalendar"]');
-  await tick(7);
-  ok("달력으로 바뀐다", visible("calMode") && !visible("listMode"));
+  ok("내역은 달력이 기본", visible("calMode") && !visible("listMode"));
   ok("리스트는 감춰진다", !visible("hasRows"));
   ok("달 제목이 나온다", txt("calMonthText").includes("월"), txt("calMonthText"));
 
@@ -787,6 +791,9 @@ async function wait(ms) {
   click(fresh.find((c) => c.getAttribute("data-date") === win.MP.calc.todayISO()) || fresh[0]);
   await tick(6);
   ok("날짜를 누르면 상세가 열린다", visible("dayOpen"));
+  eq("가운데 카드로 뜬다 (아래에서 올라오지 않는다)", el("dayLayer").style.alignItems, "center");
+  ok("카드 안을 눌러도 닫히지 않는다", el("daySheet").getAttribute("data-act") === "dayNoop");
+  ok("내용을 감쌀 자리가 있다 (자란 뒤 떠오른다)", !!el("dayBody"));
   ok("그날 합계가 보인다", txt("daySum").includes("원"), txt("daySum"));
   ok("상세에 항목이 나온다", el("dayList").textContent.length > 0);
   ok("상세에서 삭제할 수 있다", !!doc.querySelector('[data-el="dayList"] [data-act="removeExpense"]'));
@@ -802,7 +809,11 @@ async function wait(ms) {
 
   click('[data-act="toggleCalendar"]');
   await tick(6);
-  ok("다시 리스트로 돌아온다", visible("listMode") && !visible("calMode"));
+  ok("리스트로 바꿀 수 있다", visible("listMode") && !visible("calMode"));
+  ok("리스트에는 작성자 이름이 줄마다 보인다", el("groups").textContent.includes("예은"));
+  click('[data-act="toggleCalendar"]');
+  await tick(6);
+  ok("달력으로 되돌아온다", visible("calMode"));
 
   /* --- 10. 테마 --- */
   click('[data-act="goHome"]');
@@ -986,6 +997,21 @@ async function wait(ms) {
   eq("확인창 위에서는 넘기지 않는다", currentTab(), "home");
   click('[data-act="dialogCancel"]');
   await tick(5);
+
+  /* --- 17. 칸 -> 카드 확대 계산 --- */
+  // jsdom 은 화면 크기를 모르므로, 앱이 쓰는 계산을 같은 식으로 확인한다.
+  const onto = (from, to) => {
+    const sc = Math.min(1, Math.max(0.08, from.width / to.width));
+    return { dx: from.left - to.left, dy: from.top - to.top, scale: sc };
+  };
+  const cell = { left: 40, top: 300, width: 46, height: 74 };
+  const card = { left: 20, top: 240, width: 336, height: 420 };
+  const t = onto(cell, card);
+  eq("카드가 칸 자리에서 시작한다 (가로)", t.dx, 20);
+  eq("카드가 칸 자리에서 시작한다 (세로)", t.dy, 60);
+  ok("칸 크기만큼 줄어서 시작한다", Math.abs(t.scale - 46 / 336) < 1e-9, String(t.scale));
+  ok("확대 배율은 1을 넘지 않는다", onto({ left: 0, top: 0, width: 999 }, card).scale === 1);
+  ok("너무 작아지지도 않는다", onto({ left: 0, top: 0, width: 1 }, card).scale === 0.08);
 
   report();
 
