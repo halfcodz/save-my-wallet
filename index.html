@@ -294,7 +294,6 @@
   <!-- ===== 스낵바 ===== -->
   <div data-show="snackOpen" style="position:absolute;left:1rem;right:1rem;bottom:5.5rem;min-height:3rem;border-radius:0.75rem;background:var(--fg);color:var(--bg);display:flex;align-items:center;justify-content:space-between;gap:0.75rem;padding:0.75rem 1rem;font-size:0.8125rem;z-index:60;animation:mmUp .18s ease-out">
     <span data-el="snackText" style="line-height:1.5"></span>
-    <button data-show="snackUndo" data-act="undo" style="border:none;background:none;color:var(--bg);font-size:0.8125rem;font-weight:700;padding:0.375rem 0;flex:0 0 auto">취소</button>
   </div>
 
   <!-- ===== 지출 입력 ===== -->
@@ -393,8 +392,39 @@
       <div data-el="dayBody" style="display:flex;flex-direction:column;min-height:0;flex:1;padding:0 0.75rem 0.75rem">
         <div style="display:flex;align-items:baseline;justify-content:space-between;gap:0.75rem;padding:1.125rem 0.5rem 0.625rem;flex:0 0 auto">
           <div data-el="dayTitle" style="font-size:0.9375rem;font-weight:800;letter-spacing:-.01em"></div>
-          <div data-el="daySum" style="font-size:0.9375rem;font-weight:800"></div>
+          <!-- 아래 상자가 그날 쓴 돈을 보여주므로, 상자가 없을 때만 합계를 여기 띄운다 -->
+          <div data-show="daySumOnly" data-el="daySum" style="font-size:0.9375rem;font-weight:800"></div>
         </div>
+
+        <!-- 그날 아침 기준 수치. 홈 화면과 같은 모양이라 같은 숫자로 읽힌다.
+             기간 밖 날짜나 한도 없는 가계부에서는 통째로 숨긴다. -->
+        <div data-show="dayStats" style="flex:0 0 auto;margin:0 0.5rem 0.75rem;border:1px solid var(--g2);border-radius:0.875rem;overflow:hidden">
+          <div style="display:flex;align-items:baseline;gap:0.75rem;padding:0.6875rem 1rem;border-bottom:1px solid var(--g2)">
+            <div style="flex:1;min-width:0;font-size:0.6875rem;color:var(--g3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">하루 사용 가능한 금액</div>
+            <div style="flex:0 0 auto;display:flex;align-items:baseline;gap:0.1875rem">
+              <div data-el="dayBudgetText" class="mm-fit" style="font-size:1rem;font-weight:700;letter-spacing:-.03em">0</div>
+              <div style="font-size:0.6875rem;color:var(--g3)">원</div>
+            </div>
+          </div>
+          <div style="display:flex">
+            <div style="flex:1;padding:0.875rem 1rem;min-width:0">
+              <div data-el="dayLeftLabel" style="font-size:0.6875rem;color:var(--g3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">쓸 수 있는 돈</div>
+              <div data-el="dayLeftRow" style="display:flex;align-items:baseline;gap:0.1875rem;margin-top:0.25rem">
+                <div data-el="dayLeftText" class="mm-fit" style="font-size:1.5rem;font-weight:700;letter-spacing:-.03em">0</div>
+                <div data-el="dayLeftWon" style="font-size:0.75rem;color:var(--g3)">원</div>
+              </div>
+            </div>
+            <div style="width:1px;background:var(--g2)"></div>
+            <div style="flex:1;padding:0.875rem 1rem;min-width:0">
+              <div data-el="daySpentLabel" style="font-size:0.6875rem;color:var(--g3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">쓴 돈</div>
+              <div data-el="daySpentRow" style="display:flex;align-items:baseline;gap:0.1875rem;margin-top:0.25rem">
+                <div data-el="daySpentText" class="mm-fit" style="font-size:1.5rem;font-weight:700;letter-spacing:-.03em">0</div>
+                <div data-el="daySpentWon" style="font-size:0.75rem;color:var(--g3)">원</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div data-el="dayList" style="overflow-y:auto;flex:1;min-height:0;padding:0 0.5rem"></div>
         <button data-act="addOnDay" style="flex:0 0 auto;margin:0.75rem 0.5rem 0.25rem;height:3rem;border:none;border-radius:0.8125rem;background:var(--fg);color:var(--bg);font-size:0.9375rem;font-weight:700">이 날짜에 추가</button>
       </div>

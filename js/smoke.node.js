@@ -509,13 +509,17 @@ async function wait(ms) {
   eq("오늘 쓴 돈에 반영된다", txt("todaySpentText"), "12,000");
   eq("하루 사용 가능한 금액은 그대로", txt("dailyBudgetText"), "200,000");
   eq("오늘 쓸 수 있는 돈만 쓴 만큼 줄어든다", txt("todayLeftText"), "188,000");
-  ok("되돌리기 스낵바가 뜬다", visible("snackOpen") && visible("snackUndo"));
+  ok("저장했다는 알림은 뜨지 않는다", !visible("snackOpen"));
 
-  /* --- 5. 되돌리기 --- */
-  click('[data-act="undo"]');
+  /* --- 5. 눌러서 고치고 지우기 (알림 없이) --- */
+  click('[data-act="editExpense"]');
+  await tick(7);
+  ok("내역을 누르면 수정 화면이 열린다", visible("addOpen"));
+  click('[data-act="deleteEditing"]');
   await tick(10);
-  eq("되돌리면 지출이 사라진다", fake.childrenOf(budgetPath + "/expenses").length, 0);
-  eq("남은 금액도 되돌아온다", txt("remainingText"), "400,000");
+  eq("지우면 지출이 사라진다", fake.childrenOf(budgetPath + "/expenses").length, 0);
+  ok("지웠다는 알림도 뜨지 않는다", !visible("snackOpen"));
+  eq("남은 금액이 되돌아온다", txt("remainingText"), "400,000");
   eq("오늘 쓸 수 있는 돈도 되돌아온다", txt("todayLeftText"), "200,000");
 
   // 다시 한 건 넣어 둔다 (뒤 단계에서 쓴다)
@@ -812,7 +816,12 @@ async function wait(ms) {
   eq("가운데 카드로 뜬다 (아래에서 올라오지 않는다)", el("dayLayer").style.alignItems, "center");
   ok("카드 안을 눌러도 닫히지 않는다", el("daySheet").getAttribute("data-act") === "dayNoop");
   ok("내용을 감쌀 자리가 있다 (자란 뒤 떠오른다)", !!el("dayBody"));
-  ok("그날 합계가 보인다", txt("daySum").includes("원"), txt("daySum"));
+  ok("그날 수치 상자가 보인다", visible("dayStats"));
+  ok("상자가 있으면 머리의 합계는 접는다", !visible("daySumOnly"));
+  eq("오늘을 골랐으니 홈과 같은 말", txt("dayLeftLabel"), "오늘 쓸 수 있는 돈");
+  eq("오늘을 골랐으니 홈과 같은 하루치", txt("dayBudgetText"), txt("dailyBudgetText"));
+  eq("쓸 수 있는 돈도 홈과 같다", txt("dayLeftText"), txt("todayLeftText"));
+  eq("그날 쓴 돈도 홈과 같다", txt("daySpentText"), txt("todaySpentText"));
   ok("상세에 항목이 나온다", el("dayList").textContent.length > 0);
   ok("상세에서 삭제할 수 있다", !!doc.querySelector('[data-el="dayList"] [data-act="removeExpense"]'));
 

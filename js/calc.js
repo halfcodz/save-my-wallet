@@ -207,7 +207,8 @@
   /**
    * 메인 화면 수치 일괄 계산.
    * - remaining: 0 이하도 음수 그대로 (막지 않는다)
-   * - dailyBudget: 하루 사용 가능한 금액. 오늘 안에서는 흔들리지 않는다
+   * - dailyBudget: 하루 사용 가능한 금액. 하루치 안에서는 흔들리지 않지만,
+   *                넘겨 쓰면 남은 날로 다시 나눈 값으로 즉시 낮아진다
    * - todayLeft: 하루치에서 오늘 쓴 만큼 뺀 값. 넘겼으면 음수
    * - dailyBudget / todayLeft: 기간이 끝났으면 null (화면에서 숨긴다)
    */
@@ -227,14 +228,22 @@
     var left = daysLeft(todayIso, b.endDate);
     var ended = status === "ended";
 
-    /* 하루 사용 가능한 금액.
+    /* 오늘 몫으로 잡아 둔 하루치.
        오늘을 시작할 때 남아 있던 돈(= 남은 금액 + 오늘 쓴 돈)을 오늘 포함 남은 날로 나눈다.
-       오늘 쓴 돈을 도로 더해서 나누므로, 오늘 지출을 넣어도 이 값은 그대로다.
-       어제까지 많이 썼으면 오늘 이 값이 낮아진 채로 시작하고, 아껴 썼으면 올라간다. */
-    var dailyBudget = ended ? null : floorTo100((remaining + todaySpent) / left);
+       오늘 쓴 돈을 도로 더해서 나누므로, 하루치 안에서 쓰는 동안은 이 값이 흔들리지 않는다. */
+    var base = ended ? null : floorTo100((remaining + todaySpent) / left);
     /* 오늘 쓸 수 있는 돈 = 하루치에서 오늘 쓴 만큼 뺀 것.
        하루치를 넘겼으면 음수 그대로 보여준다 (막지 않는다). */
-    var todayLeft = dailyBudget === null ? null : dailyBudget - todaySpent;
+    var todayLeft = base === null ? null : base - todaySpent;
+    var overToday = todayLeft !== null && todaySpent > 0 && todayLeft < 0;
+
+    /* 넘겨 썼으면 오늘 몫은 이미 끝났다. 남은 금액을 내일부터 남은 날로 다시 나눠서
+       "앞으로 하루에 쓸 수 있는 평균"을 그 자리에서 낮춘다.
+       이 값은 내일이 되면 base와 같아지므로 화면의 숫자가 이어진다.
+       마지막 날이라 나눌 날이 없으면 남은 금액을 그대로 본다. */
+    var dailyBudget =
+      base === null ? null :
+      overToday ? floorTo100(remaining / Math.max(1, left - 1)) : base;
 
     // 한도를 정하지 않은 가계부(그냥 기록용)는 남은 금액 대신 하루 평균을 본다
     var hasLimit = total > 0;
@@ -256,9 +265,63 @@
       todayLeft: todayLeft,
       spentPct: total > 0 ? clamp((spent / total) * 100, 0, 100) : 0,
       // 오늘 하루치를 넘겼는지 (게이지 빗금 표시용)
-      overToday: todayLeft !== null && todaySpent > 0 && todayLeft < 0,
+      overToday: overToday,
       count: list.length
     };
+  }
+
+  /**
+   * 달력에서 고른 하루의 수치. 그날 아침에 홈 화면이 보여줬을 값을 되살린다.
+   * 그날 이후에 쓴 돈은 아직 없던 것으로 보고, 그날 이전 지출만 빼서 다시 나눈다.
+   * 규칙은 computeBudgetStats와 같아서, 오늘을 고르면 홈 화면과 같은 숫자가 나온다.
+   * 기간 밖 날짜나 한도 없는 가계부에서는 dailyBudget / dayLeft 가 null (화면에서 숨긴다).
+   */
+  function computeDayStats(budget, expenses, dateIso) {
+    // 나의 가계부는 그 날짜가 속한 달로 본다
+    var b = effectiveBudget(budget, dateIso);
+    var list = budgetExpenses(expenses, budget, dateIso);
+    var before = 0;
+    var daySpent = 0;
+    var count = 0;
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].date < dateIso) before += list[i].amount;
+      else if (list[i].date === dateIso) {
+        daySpent += list[i].amount;
+        count++;
+      }
+    }
+
+    var opening = b.totalAmount - before; // 그날 아침에 남아 있던 돈
+    var left = daysLeft(dateIso, b.endDate);
+    var inPeriod = dateIso >= b.startDate && dateIso <= b.endDate;
+    var hasLimit = b.totalAmount > 0;
+    var usable = inPeriod && hasLimit && left > 0;
+
+    var base = usable ? floorTo100(opening / left) : null;
+    var dayLeft = base === null ? null : base - daySpent;
+    var over = dayLeft !== null && daySpent > 0 && dayLeft < 0;
+
+    return {
+      date: dateIso,
+      hasLimit: hasLimit,
+      inPeriod: inPeriod,
+      usable: usable,
+      daySpent: daySpent,
+      count: count,
+      daysLeft: left > 0 ? left : 0,
+      // 넘겨 썼으면 그날 몫은 끝났다. 남은 돈을 다음 날부터 남은 날로 다시 나눈다.
+      dailyBudget:
+        base === null ? null :
+        over ? floorTo100((opening - daySpent) / Math.max(1, left - 1)) : base,
+      dayLeft: dayLeft,
+      over: over
+    };
+  }
+
+  /** "8/21" — 달력에서 고른 날짜를 라벨에 넣을 때 */
+  function shortDate(dateIso) {
+    var d = parseISO(dateIso);
+    return d.getMonth() + 1 + "/" + d.getDate();
   }
 
   /** 카테고리별 합계 -> 큰 순서. 삭제된 카테고리도 이름을 유지한 채 자기 줄로 남는다. */
@@ -568,6 +631,8 @@
     sumAmount: sumAmount,
     expensesOfBudget: expensesOfBudget,
     computeBudgetStats: computeBudgetStats,
+    computeDayStats: computeDayStats,
+    shortDate: shortDate,
     categoryShares: categoryShares,
     groupByDate: groupByDate,
     findCategory: findCategory,

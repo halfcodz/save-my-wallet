@@ -239,11 +239,13 @@
     }
   }
 
-  /* ---------- 스낵바 ---------- */
+  /* ---------- 스낵바 ----------
+     지출을 넣고 고치고 지우는 것은 화면이 바로 바뀌어서 알려 주므로 띄우지 않는다.
+     여기 남은 것은 오류·오프라인·초대처럼 화면만 봐서는 알 수 없는 것들이다. */
 
-  function snack(message, undo) {
+  function snack(message) {
     clearTimeout(ui.snackTimer);
-    ui.snack = { text: message, undo: undo || null };
+    ui.snack = { text: message };
     ui.snackTimer = setTimeout(function () {
       ui.snack = null;
       render();
@@ -403,7 +405,6 @@
     show("listMode", ui.historyView === "list");
     show("calMode", ui.historyView === "calendar");
     show("snackOpen", !!ui.snack);
-    show("snackUndo", !!(ui.snack && ui.snack.undo));
     show("editing", !!ui.draft.editingId);
 
     css("tabHome", tabStyle("home"));
@@ -910,6 +911,7 @@
 
     text("dayTitle", calc.dayLabel(ui.dayOpen, today));
     text("daySum", calc.formatWon(calc.sumAmount(items)) + "원");
+    renderDayStats(view, ui.dayOpen);
 
     html(
       el("dayList"),
@@ -938,6 +940,31 @@
             .join("")
         : '<div style="padding:1.625rem 0;text-align:center;font-size:0.8125rem;color:var(--g3)">이 날은 기록이 없습니다</div>'
     );
+  }
+
+  /**
+   * 달력에서 고른 날짜의 수치를 홈 화면과 같은 상자에 꽂는다.
+   * 그날 아침 기준이라, 오늘을 고르면 홈 화면과 같은 숫자가 나온다.
+   */
+  function renderDayStats(view, dateIso) {
+    var st = calc.computeDayStats(view, data.expenses, dateIso);
+
+    show("dayStats", st.usable);
+    show("daySumOnly", !st.usable);
+    if (!st.usable) return;
+
+    // 오늘이면 홈 화면과 같은 말로, 아니면 "8/21에"처럼 날짜를 앞에 둔다
+    var when = dateIso === today ? "오늘" : calc.shortDate(dateIso) + "에";
+    var past = dateIso < today;
+
+    text("dayBudgetText", calc.formatWon(st.dailyBudget));
+    text("dayLeftLabel", when + (past ? " 쓸 수 있던 돈" : " 쓸 수 있는 돈"));
+    text("dayLeftText", calc.formatWon(st.dayLeft));
+    text("daySpentLabel", when + " 쓴 돈");
+    text("daySpentText", calc.formatWon(st.daySpent));
+
+    fit(el("dayLeftText"), el("dayLeftWon"), 24, 3);
+    fit(el("daySpentText"), el("daySpentWon"), 24, 3);
   }
 
   function rowsHTML(g, view) {
@@ -1486,7 +1513,6 @@
       });
       ui.addOpen = false;
       ui.draft.editingId = null;
-      snack("수정됨", null);
       render();
       return;
     }
@@ -1502,27 +1528,18 @@
       date: d.date,
       createdAt: Date.now()
     };
-    var newId = store.addExpense(created);
+    store.addExpense(created);
     ui.addOpen = false;
     ui.tab = "home";
-
-    var c = calc.resolveCategory({ categoryId: d.categoryId }, data.categories);
-    snack(calc.formatWon(created.amount) + "원 · " + c.name + " 저장", function () {
-      store.removeExpenses([{ id: newId, budgetId: created.budgetId }]);
-    });
     render();
   }
 
   function removeExpense(id) {
     var gone = findExpense(id);
     if (!gone) return;
-    var copy = model.clone(gone);
     store.removeExpenses([gone]);
     ui.addOpen = false;
     ui.draft.editingId = null;
-    snack("삭제됨", function () {
-      store.restoreExpenses([copy]);
-    });
     render();
   }
 
@@ -1541,19 +1558,15 @@
     text("selCountText", ui.selected.length + "개 선택됨");
   }
 
-  function removeMany(ids, label) {
+  function removeMany(ids) {
     if (!ids.length) return;
     var gone = data.expenses.filter(function (e) {
       return ids.indexOf(e.id) >= 0;
     });
-    var copies = model.clone(gone);
     store.removeExpenses(gone);
     ui.selMode = false;
     ui.selected = [];
     ui.swipedId = null;
-    snack(label || ids.length + "건 삭제됨", function () {
-      store.restoreExpenses(copies);
-    });
     render();
   }
 
@@ -1622,12 +1635,12 @@
       if (MP.updater.hasUpdate()) {
         ui.updateReady = true;
         render();
-        snack("새 버전이 준비됐습니다. 위의 '지금 받기'를 눌러 주세요.", null);
+        snack("새 버전이 준비됐습니다. 위의 '지금 받기'를 눌러 주세요.");
         render();
         return;
       }
-      if (synced === false) snack("오프라인입니다. 저장된 내용을 보여줍니다.", null);
-      else snack("최신 상태입니다", null);
+      if (synced === false) snack("오프라인입니다. 저장된 내용을 보여줍니다.");
+      else snack("최신 상태입니다");
       render();
     });
   }
@@ -1730,7 +1743,7 @@
         },
         function () {
           auth.signOut().catch(function (err) {
-            snack(auth.messageOf(err), null);
+            snack(auth.messageOf(err));
             render();
           });
         }
@@ -1770,12 +1783,6 @@
     },
     key: function (node) {
       ui.draft.amount = calc.pressKey(ui.draft.amount, node.getAttribute("data-key"));
-      render();
-    },
-    undo: function () {
-      var fn = ui.snack && ui.snack.undo;
-      hideSnack();
-      if (fn) fn();
       render();
     },
     removeExpense: function (node) {
@@ -1838,7 +1845,7 @@
         closeSheets();
         ui.tab = "home";
         render();
-        snack("나의 가계부를 시작했습니다. 바로 기록해 보세요.", null);
+        snack("나의 가계부를 시작했습니다. 바로 기록해 보세요.");
         render();
         return;
       }
@@ -1871,12 +1878,12 @@
       if (!mine) return;
       if (ui.pb.mode === "custom") {
         if (!calc.isISODate(ui.pb.start) || !calc.isISODate(ui.pb.end)) {
-          snack("기간을 정확히 골라 주세요", null);
+          snack("기간을 정확히 골라 주세요");
           render();
           return;
         }
         if (ui.pb.end < ui.pb.start) {
-          snack("종료일이 시작일보다 앞설 수 없습니다", null);
+          snack("종료일이 시작일보다 앞설 수 없습니다");
           render();
           return;
         }
@@ -1890,7 +1897,7 @@
       });
       ui.personalOpen = false;
       render();
-      snack("저장했습니다", null);
+      snack("저장했습니다");
       render();
     },
 
@@ -1975,7 +1982,7 @@
       var ids = calc.budgetExpenses(data.expenses, view, today).map(function (e) { return e.id; });
       if (!ids.length) {
         render();
-        snack("지울 내역이 없습니다", null);
+        snack("지울 내역이 없습니다");
         render();
         return;
       }
@@ -1989,7 +1996,7 @@
           ok: "모두 삭제"
         },
         function () {
-          removeMany(ids, ids.length + "건 삭제됨");
+          removeMany(ids);
         }
       );
     },
@@ -2007,7 +2014,7 @@
       var b = findBudget(id);
       if (!b) return;
       if (!isOwner(b)) {
-        snack("예산을 만든 사람만 지울 수 있습니다", null);
+        snack("예산을 만든 사람만 지울 수 있습니다");
         render();
         return;
       }
@@ -2049,7 +2056,7 @@
         store.shareBudget(b.id).then(
           function () {
             ui.share.busy = false;
-            snack("초대 코드를 만들었습니다", null);
+            snack("초대 코드를 만들었습니다");
             render();
           },
           shareFail
@@ -2080,7 +2087,7 @@
           store.stopInvites(b.id).then(
             function () {
               ui.share.busy = false;
-              snack("초대를 껐습니다", null);
+              snack("초대를 껐습니다");
               render();
             },
             shareFail
@@ -2093,7 +2100,7 @@
       if (!b || !b.inviteCode) return;
       copyText(b.inviteCode).then(
         function () {
-          snack("초대 코드를 복사했습니다", null);
+          snack("초대 코드를 복사했습니다");
           render();
         },
         function () {
@@ -2115,7 +2122,7 @@
       }
       copyText(body).then(
         function () {
-          snack("초대 문구를 복사했습니다", null);
+          snack("초대 문구를 복사했습니다");
           render();
         },
         function () {
@@ -2134,7 +2141,7 @@
           ui.share.code = "";
           ui.shareOpen = false;
           ui.tab = "home";
-          snack(r.alreadyMember ? "이미 함께 쓰고 있는 가계부입니다" : "여행 가계부에 참여했습니다", null);
+          snack(r.alreadyMember ? "이미 함께 쓰고 있는 가계부입니다" : "여행 가계부에 참여했습니다");
           render();
         },
         shareFail
@@ -2161,7 +2168,7 @@
           store.removeMember(b.id, uid).then(
             function () {
               ui.share.busy = false;
-              snack("내보냈습니다", null);
+              snack("내보냈습니다");
               render();
             },
             shareFail
@@ -2512,7 +2519,7 @@
     var b = findBudget(id);
     if (!b) return;
     if (isOwner(b)) {
-      snack("만든 사람은 나갈 수 없습니다. 예산을 삭제해 주세요.", null);
+      snack("만든 사람은 나갈 수 없습니다. 예산을 삭제해 주세요.");
       render();
       return;
     }
@@ -2526,11 +2533,11 @@
         store.leaveBudget(id).then(
           function () {
             ui.shareOpen = false;
-            snack("나왔습니다", null);
+            snack("나왔습니다");
             render();
           },
           function (err) {
-            snack(auth.messageOf(err), null);
+            snack(auth.messageOf(err));
             render();
           }
         );
@@ -2543,11 +2550,11 @@
     auth.rename(next).then(
       function (user) {
         store.syncMyName(user.name);
-        snack("이름을 바꿨습니다", null);
+        snack("이름을 바꿨습니다");
         render();
       },
       function (err) {
-        snack(auth.messageOf(err), null);
+        snack(auth.messageOf(err));
         render();
       }
     );
@@ -2802,7 +2809,7 @@
   });
 
   store.onError(function (message) {
-    snack(message, null);
+    snack(message);
     render();
   });
 
@@ -2845,12 +2852,12 @@
       function () {
         store.importLegacy().then(
           function (count) {
-            snack("지출 " + count + "건을 계정으로 옮겼습니다", null);
+            snack("지출 " + count + "건을 계정으로 옮겼습니다");
             render();
           },
           function (err) {
             legacyAsked = false; // 실패하면 다음에 다시 물어본다
-            snack(auth.messageOf(err), null);
+            snack(auth.messageOf(err));
             render();
           }
         );
