@@ -207,9 +207,9 @@
   /**
    * 메인 화면 수치 일괄 계산.
    * - remaining: 0 이하도 음수 그대로 (막지 않는다)
-   * - dailyBudget: 하루 사용 가능한 금액. 하루치 안에서는 흔들리지 않지만,
-   *                넘겨 쓰면 남은 날로 다시 나눈 값으로 즉시 낮아진다
-   * - todayLeft: 하루치에서 오늘 쓴 만큼 뺀 값. 넘겼으면 음수
+   * - dailyBudget: 하루 사용 가능한 금액 = 남은 돈 / 남은 날.
+   *                지금까지의 기록을 전부 반영한 값이라 지출이 들어오는 즉시 따라 움직인다
+   * - todayLeft: 오늘 아침 하루치에서 오늘 쓴 만큼 뺀 값. 넘겼으면 음수
    * - dailyBudget / todayLeft: 기간이 끝났으면 null (화면에서 숨긴다)
    */
   function computeBudgetStats(budget, expenses, todayIso) {
@@ -225,29 +225,27 @@
       })
     );
     var status = budgetStatus(b, todayIso);
-    var left = daysLeft(todayIso, b.endDate);
     var ended = status === "ended";
+    var span = diffDays(b.startDate, b.endDate) + 1;
 
-    /* 오늘 몫으로 잡아 둔 하루치.
-       오늘을 시작할 때 남아 있던 돈(= 남은 금액 + 오늘 쓴 돈)을 오늘 포함 남은 날로 나눈다.
-       오늘 쓴 돈을 도로 더해서 나누므로, 하루치 안에서 쓰는 동안은 이 값이 흔들리지 않는다. */
-    var base = ended ? null : floorTo100((remaining + todaySpent) / left);
-    /* 오늘 쓸 수 있는 돈 = 하루치에서 오늘 쓴 만큼 뺀 것.
-       하루치를 넘겼으면 음수 그대로 보여준다 (막지 않는다). */
-    var todayLeft = base === null ? null : base - todaySpent;
+    /* 나눠야 할 날 수. 아직 시작 전이면 예산 기간 전체다.
+       오늘부터 종료일까지로 세면 기간보다 길어져서 하루치가 낮게 나온다. */
+    var left = todayIso < b.startDate ? span : daysLeft(todayIso, b.endDate);
+
+    /* 하루 사용 가능한 금액 = 남은 돈 / 남은 날.
+       남은 돈에는 지금까지 쓴 것이 전부(오늘 쓴 것 포함) 빠져 있어서,
+       지난 날 아껴 쓴 만큼은 올라가고 넘겨 쓴 만큼은 내려간 값이 바로 나온다. */
+    var dailyBudget = ended ? null : floorTo100(remaining / left);
+
+    /* 오늘 쓸 수 있는 돈은 오늘 아침 하루치에서 오늘 쓴 만큼 뺀 것.
+       아침 하루치는 오늘 쓴 돈을 도로 더해서 구하므로 하루 안에서 흔들리지 않고,
+       그래서 "쓴 만큼 정확히 줄어드는" 숫자가 된다. 넘겼으면 음수 그대로 둔다. */
+    var openingDaily = ended ? null : floorTo100((remaining + todaySpent) / left);
+    var todayLeft = openingDaily === null ? null : openingDaily - todaySpent;
     var overToday = todayLeft !== null && todaySpent > 0 && todayLeft < 0;
-
-    /* 넘겨 썼으면 오늘 몫은 이미 끝났다. 남은 금액을 내일부터 남은 날로 다시 나눠서
-       "앞으로 하루에 쓸 수 있는 평균"을 그 자리에서 낮춘다.
-       이 값은 내일이 되면 base와 같아지므로 화면의 숫자가 이어진다.
-       마지막 날이라 나눌 날이 없으면 남은 금액을 그대로 본다. */
-    var dailyBudget =
-      base === null ? null :
-      overToday ? floorTo100(remaining / Math.max(1, left - 1)) : base;
 
     // 한도를 정하지 않은 가계부(그냥 기록용)는 남은 금액 대신 하루 평균을 본다
     var hasLimit = total > 0;
-    var span = diffDays(b.startDate, b.endDate) + 1;
     var elapsed = clamp(diffDays(b.startDate, todayIso) + 1, 1, span);
 
     return {
@@ -297,8 +295,9 @@
     var hasLimit = b.totalAmount > 0;
     var usable = inPeriod && hasLimit && left > 0;
 
-    var base = usable ? floorTo100(opening / left) : null;
-    var dayLeft = base === null ? null : base - daySpent;
+    // 홈 화면과 같은 규칙: 하루치는 그날이 끝난 뒤 남은 돈을 그날 포함 남은 날로 나눈 값
+    var openingDaily = usable ? floorTo100(opening / left) : null;
+    var dayLeft = openingDaily === null ? null : openingDaily - daySpent;
     var over = dayLeft !== null && daySpent > 0 && dayLeft < 0;
 
     return {
@@ -309,10 +308,7 @@
       daySpent: daySpent,
       count: count,
       daysLeft: left > 0 ? left : 0,
-      // 넘겨 썼으면 그날 몫은 끝났다. 남은 돈을 다음 날부터 남은 날로 다시 나눈다.
-      dailyBudget:
-        base === null ? null :
-        over ? floorTo100((opening - daySpent) / Math.max(1, left - 1)) : base,
+      dailyBudget: usable ? floorTo100((opening - daySpent) / left) : null,
       dayLeft: dayLeft,
       over: over
     };
