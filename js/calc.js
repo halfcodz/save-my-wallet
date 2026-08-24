@@ -207,7 +207,9 @@
   /**
    * 메인 화면 수치 일괄 계산.
    * - remaining: 0 이하도 음수 그대로 (막지 않는다)
-   * - perDay: 기간이 끝났으면 null (일일 권장액 숨김)
+   * - dailyBudget: 하루 사용 가능한 금액. 오늘 안에서는 흔들리지 않는다
+   * - todayLeft: 하루치에서 오늘 쓴 만큼 뺀 값. 넘겼으면 음수
+   * - dailyBudget / todayLeft: 기간이 끝났으면 null (화면에서 숨긴다)
    */
   function computeBudgetStats(budget, expenses, todayIso) {
     // 나의 가계부는 이번 달만 본다 (effectiveBudget / budgetExpenses가 걸러 준다)
@@ -224,7 +226,15 @@
     var status = budgetStatus(b, todayIso);
     var left = daysLeft(todayIso, b.endDate);
     var ended = status === "ended";
-    var perDay = ended ? null : floorTo100(remaining / left);
+
+    /* 하루 사용 가능한 금액.
+       오늘을 시작할 때 남아 있던 돈(= 남은 금액 + 오늘 쓴 돈)을 오늘 포함 남은 날로 나눈다.
+       오늘 쓴 돈을 도로 더해서 나누므로, 오늘 지출을 넣어도 이 값은 그대로다.
+       어제까지 많이 썼으면 오늘 이 값이 낮아진 채로 시작하고, 아껴 썼으면 올라간다. */
+    var dailyBudget = ended ? null : floorTo100((remaining + todaySpent) / left);
+    /* 오늘 쓸 수 있는 돈 = 하루치에서 오늘 쓴 만큼 뺀 것.
+       하루치를 넘겼으면 음수 그대로 보여준다 (막지 않는다). */
+    var todayLeft = dailyBudget === null ? null : dailyBudget - todaySpent;
 
     // 한도를 정하지 않은 가계부(그냥 기록용)는 남은 금액 대신 하루 평균을 본다
     var hasLimit = total > 0;
@@ -242,10 +252,11 @@
       daysLeft: ended ? 0 : left,
       status: status,
       ended: ended,
-      perDay: perDay,
+      dailyBudget: dailyBudget,
+      todayLeft: todayLeft,
       spentPct: total > 0 ? clamp((spent / total) * 100, 0, 100) : 0,
-      // 오늘 권장액을 넘겼는지 (게이지 빗금 표시용)
-      overToday: perDay !== null && todaySpent > 0 && todaySpent > perDay,
+      // 오늘 하루치를 넘겼는지 (게이지 빗금 표시용)
+      overToday: todayLeft !== null && todaySpent > 0 && todayLeft < 0,
       count: list.length
     };
   }

@@ -99,7 +99,8 @@
     // 지출 9,500 + 4,800 + 1,400 (오늘) + 32,000 + 18,000 (어제) = 65,700
     // 남은 금액 = 800,000 - 65,700 = 734,300
     // 남은 일수 = 31 - 22 + 1 = 10
-    // 오늘 쓸 수 있는 돈 = 734,300 / 10 = 73,430 -> 100원 내림 -> 73,400
+    // 하루 사용 가능한 금액 = (734,300 + 오늘 쓴 15,700) / 10 = 75,000
+    // 오늘 쓸 수 있는 돈 = 75,000 - 15,700 = 59,300
     var e1 = [
       exp("b1", 9500, "2026-08-22", "cat_0", "김치찌개"),
       exp("b1", 4800, "2026-08-22", "cat_1"),
@@ -111,8 +112,11 @@
     eq("메인: 지출 합계 65,700", s1.spent, 65700);
     eq("메인: 남은 금액 734,300", s1.remaining, 734300);
     eq("메인: 남은 일수 10", s1.daysLeft, 10);
-    eq("메인: 오늘 쓸 수 있는 돈 73,400", s1.perDay, 73400);
+    eq("메인: 하루 사용 가능한 금액 75,000", s1.dailyBudget, 75000);
+    eq("메인: 오늘 쓸 수 있는 돈 59,300", s1.todayLeft, 59300);
     eq("메인: 오늘 쓴 돈 15,700", s1.todaySpent, 15700);
+    eq("메인: 쓴 만큼 정확히 차감된다", s1.dailyBudget - s1.todayLeft, s1.todaySpent);
+    eq("메인: 아직 하루치를 안 넘겼다", s1.overToday, false);
     eq("메인: 종료 아님", s1.ended, false);
     eq("메인: 건수 5", s1.count, 5);
 
@@ -123,7 +127,8 @@
     var s2 = calc.computeBudgetStats(b2, e2, "2026-08-22");
     eq("나머지: 남은 금액 376,544", s2.remaining, 376544);
     eq("나머지: 남은 일수 7", s2.daysLeft, 7);
-    eq("나머지: 권장액 53,700", s2.perDay, 53700);
+    eq("나머지: 하루 사용 가능한 금액 53,700", s2.dailyBudget, 53700);
+    eq("나머지: 오늘 안 썼으면 하루치가 그대로 남는다", s2.todayLeft, 53700);
     eq("나머지: 오늘 쓴 돈 0", s2.todaySpent, 0);
 
     /* ---------- 6. 초과 지출: 음수 그대로 ---------- */
@@ -133,13 +138,16 @@
     var s3 = calc.computeBudgetStats(b3, e3, "2026-08-22");
     eq("초과: 남은 금액 음수 그대로", s3.remaining, -50001);
     eq("초과: 남은 일수 5", s3.daysLeft, 5);
-    eq("초과: 권장액도 음수", s3.perDay, -10100);
+    eq("초과: 하루치도 음수", s3.dailyBudget, -10100);
+    eq("초과: 오늘 쓸 수 있는 돈도 음수", s3.todayLeft, -10100);
     eq("초과: 게이지는 100%에서 멈춤", s3.spentPct, 100);
 
     /* ---------- 7. 기간 종료 ---------- */
     var s4 = calc.computeBudgetStats(b, e1, "2026-09-01");
     eq("종료: ended = true", s4.ended, true);
-    eq("종료: 권장액 숨김(null)", s4.perDay, null);
+    eq("종료: 하루치 숨김(null)", s4.dailyBudget, null);
+    eq("종료: 오늘 쓸 수 있는 돈도 숨김(null)", s4.todayLeft, null);
+    eq("종료: 넘김 표시도 끈다", s4.overToday, false);
     eq("종료: 남은 일수 0", s4.daysLeft, 0);
     eq("종료: 남은 금액은 그대로 계산", s4.remaining, 734300);
     eq("종료: 오늘 쓴 돈 0", s4.todaySpent, 0);
@@ -147,7 +155,8 @@
     /* ---------- 8. 마지막 날 ---------- */
     var s5 = calc.computeBudgetStats(b, e1, "2026-08-31");
     eq("마지막날: 남은 일수 1", s5.daysLeft, 1);
-    eq("마지막날: 권장액 = 남은 금액 내림 734,300", s5.perDay, 734300);
+    eq("마지막날: 하루치 = 남은 금액 내림 734,300", s5.dailyBudget, 734300);
+    eq("마지막날: 오늘 쓸 수 있는 돈도 734,300", s5.todayLeft, 734300);
 
     /* ---------- 9. 다른 예산 지출은 섞이지 않는다 ---------- */
     var mixed = e1.concat([exp("b_other", 999999, "2026-08-22")]);
@@ -157,14 +166,18 @@
     /* ---------- 10. 지출 0건 ---------- */
     var s7 = calc.computeBudgetStats(b, [], "2026-08-22");
     eq("빈 예산: 남은 금액 = 총액", s7.remaining, 800000);
-    eq("빈 예산: 권장액 80,000", s7.perDay, 80000);
+    eq("빈 예산: 하루 사용 가능한 금액 80,000", s7.dailyBudget, 80000);
+    eq("빈 예산: 오늘 쓸 수 있는 돈 80,000", s7.todayLeft, 80000);
     eq("빈 예산: 게이지 0%", s7.spentPct, 0);
 
     /* ---------- 11. 아주 큰 금액 ---------- */
     var bBig = budget({ id: "bg", startDate: "2026-08-01", endDate: "2026-08-31", totalAmount: 999999999 });
     var sBig = calc.computeBudgetStats(bBig, [exp("bg", 999999999, "2026-08-22")], "2026-08-22");
     eq("큰 금액: 남은 금액 0", sBig.remaining, 0);
-    eq("큰 금액: 권장액 0", sBig.perDay, 0);
+    // 오늘 999,999,999를 다 썼다: 하루치는 그대로고 오늘 쓸 수 있는 돈만 크게 음수가 된다
+    eq("큰 금액: 하루치 99,999,900", sBig.dailyBudget, 99999900);
+    eq("큰 금액: 오늘 쓸 수 있는 돈 -900,000,099", sBig.todayLeft, -900000099);
+    eq("큰 금액: 하루치를 넘긴 것으로 잡힌다", sBig.overToday, true);
     eq("큰 금액: 포맷", calc.formatWon(999999999), "999,999,999");
     eq("큰 금액: 음수 포맷", calc.formatWon(-999999999), "-999,999,999");
 
@@ -482,6 +495,9 @@
     eq("나의 가계부: 이번 달 남은 일수", ms.daysLeft, 10);
     eq("나의 가계부: 달 안이면 진행 중", ms.status, "active");
     eq("나의 가계부: 오늘 쓴 돈", ms.todaySpent, 20000);
+    // (570,000 + 20,000) / 10 = 59,000 -> 오늘 20,000 썼으니 39,000 남았다
+    eq("나의 가계부: 하루 사용 가능한 금액 59,000", ms.dailyBudget, 59000);
+    eq("나의 가계부: 오늘 쓸 수 있는 돈 39,000", ms.todayLeft, 39000);
 
     var nextMonth = calc.computeBudgetStats(mine, mineExp, "2026-09-02");
     eq("달이 바뀌면 지출도 새 달 것만", nextMonth.spent, 70000);
@@ -570,7 +586,27 @@
     eq("자정: 남은 일수 하루 줄어듦", beforeMidnight.daysLeft - afterMidnight.daysLeft, 1);
     eq("자정: 오늘 쓴 돈 0으로 리셋", afterMidnight.todaySpent, 0);
     eq("자정: 남은 금액은 그대로", afterMidnight.remaining, beforeMidnight.remaining);
-    ok("자정: 권장액 늘어남", afterMidnight.perDay > beforeMidnight.perDay);
+    // 어제 하루치(75,000)보다 적게 썼으므로 오늘 하루치가 올라간다
+    eq("자정: 하루치 다시 계산 81,500", afterMidnight.dailyBudget, 81500);
+    ok("자정: 아껴 썼으면 하루치가 올라간다", afterMidnight.dailyBudget > beforeMidnight.dailyBudget);
+    eq("자정: 오늘 쓴 게 없으니 하루치가 그대로 남는다", afterMidnight.todayLeft, afterMidnight.dailyBudget);
+
+    /* ---------- 20.5 하루치는 오늘 안에서 흔들리지 않는다 ---------- */
+    var day0 = calc.computeBudgetStats(b, [], "2026-08-22");
+    var day1 = calc.computeBudgetStats(b, [exp("b1", 30000, "2026-08-22")], "2026-08-22");
+    var day2 = calc.computeBudgetStats(b, [exp("b1", 30000, "2026-08-22"), exp("b1", 60000, "2026-08-22")], "2026-08-22");
+    eq("같은 날: 하루치는 그대로 (지출 전)", day0.dailyBudget, 80000);
+    eq("같은 날: 하루치는 그대로 (3만원 씀)", day1.dailyBudget, 80000);
+    eq("같은 날: 하루치는 그대로 (9만원 씀)", day2.dailyBudget, 80000);
+    eq("같은 날: 오늘 쓸 수 있는 돈만 줄어든다", day1.todayLeft, 50000);
+    eq("같은 날: 넘기면 음수로 내려간다", day2.todayLeft, -10000);
+    eq("같은 날: 넘기기 전엔 표시 없음", day1.overToday, false);
+    eq("같은 날: 넘기면 게이지 빗금", day2.overToday, true);
+
+    // 오늘 넘겨 쓰면 다음 날 하루치가 낮아진다
+    var nextDay = calc.computeBudgetStats(b, [exp("b1", 30000, "2026-08-22"), exp("b1", 60000, "2026-08-22")], "2026-08-23");
+    ok("넘겨 쓰면 다음 날 하루치가 낮아진다", nextDay.dailyBudget < day0.dailyBudget);
+    eq("넘겨 쓴 다음 날 하루치 78,800", nextDay.dailyBudget, 78800);
 
     return results;
   }

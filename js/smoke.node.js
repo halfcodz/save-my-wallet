@@ -477,6 +477,9 @@ async function wait(ms) {
   eq("멤버는 나 혼자", budget.memberUids.length, 1);
   eq("초대 코드는 아직 없음", budget.inviteCode, null);
   eq("남은 금액이 총액과 같다", txt("remainingText"), "400,000");
+  // 남은 일수 2일(오늘, 내일) -> 400,000 / 2
+  eq("하루 사용 가능한 금액이 뜬다", txt("dailyBudgetText"), "200,000");
+  eq("아직 안 썼으니 하루치가 그대로 남는다", txt("todayLeftText"), "200,000");
 
   /* --- 4. 지출 입력 --- */
   click('[data-act="openAdd"]');
@@ -504,6 +507,8 @@ async function wait(ms) {
   ok("카테고리 이름이 함께 박힌다", !!saved.categoryName);
   eq("남은 금액이 줄어든다", txt("remainingText"), "388,000");
   eq("오늘 쓴 돈에 반영된다", txt("todaySpentText"), "12,000");
+  eq("하루 사용 가능한 금액은 그대로", txt("dailyBudgetText"), "200,000");
+  eq("오늘 쓸 수 있는 돈만 쓴 만큼 줄어든다", txt("todayLeftText"), "188,000");
   ok("되돌리기 스낵바가 뜬다", visible("snackOpen") && visible("snackUndo"));
 
   /* --- 5. 되돌리기 --- */
@@ -511,6 +516,7 @@ async function wait(ms) {
   await tick(10);
   eq("되돌리면 지출이 사라진다", fake.childrenOf(budgetPath + "/expenses").length, 0);
   eq("남은 금액도 되돌아온다", txt("remainingText"), "400,000");
+  eq("오늘 쓸 수 있는 돈도 되돌아온다", txt("todayLeftText"), "200,000");
 
   // 다시 한 건 넣어 둔다 (뒤 단계에서 쓴다)
   click('[data-act="openAdd"]');
@@ -635,7 +641,8 @@ async function wait(ms) {
   eq("한도가 없으면 쓴 돈을 보여준다", txt("mainLabel"), "쓴 돈");
   ok("게이지는 숨긴다", !visible("hasLimit"));
   ok("한도를 정하라는 안내가 보인다", visible("noLimit"));
-  eq("권장액 대신 하루 평균", txt("perDayLabel"), "하루 평균");
+  ok("하루 한도 줄도 함께 숨긴다", !visible("hasLimit"));
+  eq("오늘 쓸 수 있는 돈 대신 하루 평균", txt("todayLeftLabel"), "하루 평균");
   eq("아직 쓴 게 없다", txt("remainingText"), "0");
 
   // 한도와 기간은 나의 가계부 안에서 정한다
@@ -658,8 +665,9 @@ async function wait(ms) {
   ok("설정 화면이 닫힌다", !visible("personalOpen"));
   eq("한도가 생기면 남은 금액으로", txt("mainLabel"), "남은 금액");
   eq("남은 금액은 한도 그대로", txt("remainingText"), "600,000");
-  eq("오늘 쓸 수 있는 돈으로 바뀐다", txt("perDayLabel"), "오늘 쓸 수 있는 돈");
+  eq("오늘 쓸 수 있는 돈으로 바뀐다", txt("todayLeftLabel"), "오늘 쓸 수 있는 돈");
   ok("게이지가 다시 보인다", visible("hasLimit"));
+  ok("하루 한도 줄도 다시 보인다", !!el("dailyBudgetText") && txt("dailyBudgetText") !== "0");
 
   // 나의 가계부는 함께 쓸 수 없다
   click('[data-act="openShare"]');

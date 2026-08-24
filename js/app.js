@@ -1155,11 +1155,14 @@
         (s.overToday ? STRIPES : "var(--fg)") + ";transition:width .3s ease"
     );
 
-    // 한도가 없으면 권장액 대신 하루 평균. 기간이 끝나면 값만 —
-    text("perDayLabel", s.hasLimit ? "오늘 쓸 수 있는 돈" : "하루 평균");
+    // 하루 한도는 한도를 정한 가계부에서만 뜻이 있다 (data-show="hasLimit"가 줄을 숨긴다)
+    text("dailyBudgetText", s.ended ? "—" : calc.formatWon(s.dailyBudget));
+
+    // 한도가 없으면 오늘 쓸 수 있는 돈 대신 하루 평균. 기간이 끝나면 값만 —
+    text("todayLeftLabel", s.hasLimit ? "오늘 쓸 수 있는 돈" : "하루 평균");
     text(
-      "perDayText",
-      !s.hasLimit ? calc.formatWon(s.avgPerDay) : s.ended ? "—" : calc.formatWon(s.perDay)
+      "todayLeftText",
+      !s.hasLimit ? calc.formatWon(s.avgPerDay) : s.ended ? "—" : calc.formatWon(s.todayLeft)
     );
     text("todaySpentText", calc.formatWon(s.todaySpent));
     text(
@@ -1193,7 +1196,7 @@
     );
 
     fit(el("remainingText"), el("remainingWon"), 56, 4);
-    fit(el("perDayText"), el("perDayWon"), 24, 3);
+    fit(el("todayLeftText"), el("todayLeftWon"), 24, 3);
     fit(el("todaySpentText"), el("todaySpentWon"), 24, 3);
   }
 
