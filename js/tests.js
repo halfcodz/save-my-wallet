@@ -626,6 +626,33 @@
     var saveNext = calc.computeBudgetStats(b, [exp("b1", 30000, "2026-08-22")], "2026-08-23");
     ok("자정: 아껴 썼으면 다음 날 올라간다", saveNext.dailyBudget > day1.dailyBudget);
 
+    /* ---------- 20.7 넘겨 쓰면 남은 돈을 남은 날로 다시 나눈다 ----------
+       총 100,000원 / 3박 4일이면 하루 25,000원.
+       첫날 60,000원을 쓰면 35,000원 초과에 남은 돈 40,000원이고,
+       하루 사용 가능한 금액은 남은 40,000원을 남은 3일로 나눈 값이어야 한다. */
+    var trip = budget({ id: "t4", startDate: "2026-08-24", endDate: "2026-08-27", totalAmount: 100000 });
+    var d1Before = calc.computeBudgetStats(trip, [], "2026-08-24");
+    eq("3박4일: 쓰기 전 하루치 25,000", d1Before.dailyBudget, 25000);
+
+    var d1After = calc.computeBudgetStats(trip, [exp("t4", 60000, "2026-08-24")], "2026-08-24");
+    eq("3박4일: 남은 금액 40,000", d1After.remaining, 40000);
+    eq("3박4일: 35,000 초과", d1After.todayLeft, -35000);
+    eq("3박4일: 하루치 = 40,000 / 3 (100원 내림)", d1After.dailyBudget, 13300);
+    eq("3박4일: 넘긴 것으로 잡힌다", d1After.overToday, true);
+
+    // 다음 날 아침에도 같은 값 (넘긴 만큼이 자정에 없던 일이 되지 않는다)
+    var d2 = calc.computeBudgetStats(trip, [exp("t4", 60000, "2026-08-24")], "2026-08-25");
+    eq("3박4일: 다음 날도 13,300", d2.dailyBudget, 13300);
+    eq("3박4일: 다음 날 쓸 수 있는 돈도 13,300", d2.todayLeft, 13300);
+
+    // 5일짜리(8/24~8/28)에서 첫날 넘기면 남은 4일로 나눈다
+    var trip5 = budget({ id: "t5", startDate: "2026-08-24", endDate: "2026-08-28", totalAmount: 100000 });
+    var over5 = [exp("t5", 60000, "2026-08-24")];
+    eq("5일: 쓰기 전 하루치 20,000", calc.computeBudgetStats(trip5, [], "2026-08-24").dailyBudget, 20000);
+    eq("5일: 첫날 넘기면 40,000 / 4 = 10,000", calc.computeBudgetStats(trip5, over5, "2026-08-24").dailyBudget, 10000);
+    eq("5일: 다음 날도 10,000", calc.computeBudgetStats(trip5, over5, "2026-08-25").dailyBudget, 10000);
+    ok("5일: 원래 하루치보다 줄었다", calc.computeBudgetStats(trip5, over5, "2026-08-25").dailyBudget < 20000);
+
     /* ---------- 20.6 아직 시작 안 한 예산 ---------- */
     // 8/25~8/31 = 7일짜리 여행을 8/20에 보면, 오늘부터 세지 말고 기간으로 나눠야 한다
     var soon = budget({ id: "s1", startDate: "2026-08-25", endDate: "2026-08-31", totalAmount: 700000 });
