@@ -507,8 +507,8 @@ async function wait(ms) {
   ok("카테고리 이름이 함께 박힌다", !!saved.categoryName);
   eq("남은 금액이 줄어든다", txt("remainingText"), "388,000");
   eq("오늘 쓴 돈에 반영된다", txt("todaySpentText"), "12,000");
-  // 하루치 = 남은 388,000 / 남은 2일. 쓰는 즉시 따라 내려간다
-  eq("하루 사용 가능한 금액도 따라 내려간다", txt("dailyBudgetText"), "194,000");
+  // 하루치(200,000) 안에서 쓴 것이라 하루치는 그대로, 오늘 쓸 수 있는 돈만 줄어든다
+  eq("하루치 안에서 쓰면 하루치는 그대로", txt("dailyBudgetText"), "200,000");
   eq("오늘 쓸 수 있는 돈은 쓴 만큼 줄어든다", txt("todayLeftText"), "188,000");
   ok("저장했다는 알림은 뜨지 않는다", !visible("snackOpen"));
 

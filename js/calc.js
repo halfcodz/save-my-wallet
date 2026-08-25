@@ -207,8 +207,8 @@
   /**
    * 메인 화면 수치 일괄 계산.
    * - remaining: 0 이하도 음수 그대로 (막지 않는다)
-   * - dailyBudget: 하루 사용 가능한 금액 = 남은 돈 / 남은 날.
-   *                지금까지의 기록을 전부 반영한 값이라 지출이 들어오는 즉시 따라 움직인다
+   * - dailyBudget: 하루 사용 가능한 금액. 넘겨 쓰면 즉시 내려가고,
+   *                그 값이 다음 날 아침 값과 같아서 자정에 도로 올라가지 않는다
    * - todayLeft: 오늘 아침 하루치에서 오늘 쓴 만큼 뺀 값. 넘겼으면 음수
    * - dailyBudget / todayLeft: 기간이 끝났으면 null (화면에서 숨긴다)
    */
@@ -232,17 +232,25 @@
        오늘부터 종료일까지로 세면 기간보다 길어져서 하루치가 낮게 나온다. */
     var left = todayIso < b.startDate ? span : daysLeft(todayIso, b.endDate);
 
-    /* 하루 사용 가능한 금액 = 남은 돈 / 남은 날.
-       남은 돈에는 지금까지 쓴 것이 전부(오늘 쓴 것 포함) 빠져 있어서,
-       지난 날 아껴 쓴 만큼은 올라가고 넘겨 쓴 만큼은 내려간 값이 바로 나온다. */
-    var dailyBudget = ended ? null : floorTo100(remaining / left);
-
-    /* 오늘 쓸 수 있는 돈은 오늘 아침 하루치에서 오늘 쓴 만큼 뺀 것.
-       아침 하루치는 오늘 쓴 돈을 도로 더해서 구하므로 하루 안에서 흔들리지 않고,
-       그래서 "쓴 만큼 정확히 줄어드는" 숫자가 된다. 넘겼으면 음수 그대로 둔다. */
+    /* 오늘 몫으로 잡아 둔 아침 하루치. 오늘 쓴 돈을 도로 더해서 나누므로
+       하루 안에서 흔들리지 않고, 그래서 "쓴 만큼 정확히 줄어드는" 숫자를 만들 수 있다. */
     var openingDaily = ended ? null : floorTo100((remaining + todaySpent) / left);
+    /* 오늘 쓸 수 있는 돈 = 아침 하루치 - 오늘 쓴 돈. 넘겼으면 음수 그대로 둔다. */
     var todayLeft = openingDaily === null ? null : openingDaily - todaySpent;
     var overToday = todayLeft !== null && todaySpent > 0 && todayLeft < 0;
+
+    /* 앞으로(내일부터) 하루에 쓸 수 있는 평균. 남은 돈을 오늘을 뺀 날수로 나눈다.
+       내일 아침이 되면 이 값이 그대로 그날의 아침 하루치가 된다. */
+    var forwardDaily = ended ? null : floorTo100(remaining / Math.max(1, left - 1));
+
+    /* 하루 사용 가능한 금액은 둘 중 낮은 쪽.
+       - 하루치 안에서 쓰는 동안은 아침 하루치가 낮아서 그대로 유지된다.
+         어제 화면에 있던 숫자가 오늘 아침에 그대로 이어진다.
+       - 넘겨 쓰면 앞으로의 평균이 더 낮아져서 그 자리에서 내려간다.
+         이 값은 내일 아침 하루치와 정확히 같으므로, 넘긴 만큼의 벌이
+         자정에 없던 일이 되지 않는다.
+       마지막 날이라 나눌 날이 없으면 남은 금액을 그대로 본다. */
+    var dailyBudget = ended ? null : Math.min(openingDaily, forwardDaily);
 
     // 한도를 정하지 않은 가계부(그냥 기록용)는 남은 금액 대신 하루 평균을 본다
     var hasLimit = total > 0;
@@ -295,10 +303,11 @@
     var hasLimit = b.totalAmount > 0;
     var usable = inPeriod && hasLimit && left > 0;
 
-    // 홈 화면과 같은 규칙: 하루치는 그날이 끝난 뒤 남은 돈을 그날 포함 남은 날로 나눈 값
+    // 홈 화면과 같은 규칙: 아침 하루치와 "그 다음 날부터의 평균" 중 낮은 쪽
     var openingDaily = usable ? floorTo100(opening / left) : null;
     var dayLeft = openingDaily === null ? null : openingDaily - daySpent;
     var over = dayLeft !== null && daySpent > 0 && dayLeft < 0;
+    var forwardDaily = usable ? floorTo100((opening - daySpent) / Math.max(1, left - 1)) : null;
 
     return {
       date: dateIso,
@@ -308,7 +317,7 @@
       daySpent: daySpent,
       count: count,
       daysLeft: left > 0 ? left : 0,
-      dailyBudget: usable ? floorTo100((opening - daySpent) / left) : null,
+      dailyBudget: usable ? Math.min(openingDaily, forwardDaily) : null,
       dayLeft: dayLeft,
       over: over
     };
